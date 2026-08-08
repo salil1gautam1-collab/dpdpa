@@ -1,0 +1,55 @@
+name: TrackVault CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trackvault
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: trackvault
+          POSTGRES_PASSWORD: trackvault
+          POSTGRES_DB: trackvault_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U trackvault"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TRACKVAULT_DATABASE_URL: postgresql+psycopg://trackvault:trackvault@localhost:5432/trackvault_test
+      TRACKVAULT_SECRET_KEY: ci-secret-key-at-least-32-characters-long
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run tests
+        run: pytest
+
+  security-scan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trackvault
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependency vulnerability scan (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt || true   # report, don't block initial pipeline
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"

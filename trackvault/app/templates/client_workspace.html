@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}My assessment{% endblock %}
+{% block body %}
+<h1>{{ c.name }}</h1>
+<p class="small">Your DPDPA compliance workspace.</p>
+
+{% if notes %}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h3 style="margin:0">🔔 Notifications {% if unread %}<span class="badge b-GAP">{{ unread }} new</span>{% endif %}</h3>
+    {% if unread %}
+    <form method="post" action="/workspace/notifications/read" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm gray">Mark all read</button>
+    </form>
+    {% endif %}
+  </div>
+  {% for n in notes %}
+  <div style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <b>{% if not n.read %}🔵 {% endif %}{{ n.title }}</b> <span class="small">{{ n.created_at.strftime('%Y-%m-%d') }}</span>
+    <div class="small" style="white-space:pre-wrap">{{ n.body[:280] }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>Complete your assessment inputs</h2>
+<div class="grid c3">
+  <div class="card"><h3>1. Questionnaire</h3><p class="small">Declare internal controls we can't see from outside. <b>{{ answered }}/{{ total }}</b> answered.</p>
+    <a class="btn sm" href="/workspace/questionnaire">Fill questionnaire</a></div>
+  <div class="card"><h3>2. Infrastructure &amp; cloud access</h3><p class="small">Optionally provide read-only access so we can verify posture directly. Consent per system.</p>
+    <a class="btn sm" href="/companies/{{ c.id }}/connectors">Provide access &amp; consent</a></div>
+  <div class="card"><h3>3. Submit</h3><p class="small">When your inputs are in, submit them — your assessment team prepares your report.</p>
+    <form method="post" action="/workspace/submit-inputs"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn green sm" type="submit">{{ 'Re-submit inputs' if c.submission and c.submission.submitted else 'Submit my inputs' }}</button></form></div>
+</div>
+
+{% if c.pending_assessment %}
+<div class="banner warn">🔔 Your inputs were submitted{% if c.submission %} on {{ c.submission.at }}{% endif %}. Your assessment team is preparing your report — it will appear below.</div>
+{% endif %}
+
+<h2>Your report</h2>
+{% if latest %}
+<div class="grid c3">
+  <div class="card"><h3>📕 Client report (PDF)</h3><p class="small">Your DPDPA assessment — cover, summary, findings.</p>
+    <a class="btn sm" target="_blank" href="/companies/{{ c.id }}/report/{{ latest.scan_id }}">Open &amp; save as PDF</a></div>
+  <div class="card"><h3>🗂 History</h3><p class="small">All your past assessments.</p>
+    <a class="btn sm gray" href="/companies/{{ c.id }}/history">Open history</a></div>
+</div>
+<p class="small">Latest {{ latest.scan_id }} · rulebook v{{ latest.rulebook_version }}</p>
+{% else %}
+<p class="small">Your report appears here once your assessment team has prepared it.</p>
+{% endif %}
+{% endblock %}

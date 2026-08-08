@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }}{% endblock %}
+{% block body %}
+<p class="small"><a href="/dashboard">← companies</a></p>
+<div class="banner op"><b>Operator view</b> — full controls. The client sees only their inputs and report.</div>
+{% if c.pending_assessment %}
+<div class="banner warn">🔔 <b>Client submitted their inputs</b>{% if c.submission %} on {{ c.submission.at }} ({{ c.submission.by }}){% endif %}. Review and run the assessment.</div>
+{% endif %}
+
+<h1>{{ c.name }}</h1>
+<div class="flexh">
+  <div style="flex:1;min-width:240px"><p class="small">{{ c.sites|join(', ') if c.sites else 'Questionnaire &amp; infrastructure assessment' }}</p></div>
+  {% if latest %}
+  {% set col = '#1a7f37' if latest.score >= 80 else '#b58900' if latest.score >= 50 else '#c62828' %}
+  <div class="donut" style="--p:{{ latest.score }};--dc:{{ col }}"><div>{{ latest.score }}%</div></div>
+  {% endif %}
+</div>
+
+{% if c.sites and not (c.scan_consent and c.scan_consent.granted) %}
+<div class="banner warn">
+  <b>Website scan not authorised.</b> Record the client's authorisation before running a web scan.
+  <form method="post" action="/companies/{{ c.id }}/consent" style="margin-top:8px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="text" name="granted_by" placeholder="Who authorised, and how" style="max-width:520px" required>
+    <button class="btn sm" type="submit">Record authorisation</button>
+  </form>
+</div>
+{% endif %}
+
+<h2>Run assessment</h2>
+<div class="rowbtns">
+  {% if user.role.value in ['admin','analyst'] %}
+  {% if c.sites %}
+  <form method="post" action="/companies/{{ c.id }}/scan" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn green" {{ 'disabled' if not (c.scan_consent and c.scan_consent.granted) }}>▶ Run full assessment</button>
+  </form>
+  {% endif %}
+  <form method="post" action="/companies/{{ c.id }}/scan" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="skip_web" value="1">
+    <button class="btn gray">Run questionnaire-only</button>
+  </form>
+  {% endif %}
+  <a class="btn" href="/companies/{{ c.id }}/connectors">🔑 Connectors</a>
+  <a class="btn gray" href="/companies/{{ c.id }}/history">History &amp; compare</a>
+</div>
+<p class="small">Questionnaire: {{ answered }}/{{ total }} answered.</p>
+
+<h2>Client access</h2>
+<div class="card">
+  <form method="post" action="/companies/{{ c.id }}/client-login">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Client sign-in email (creates/resets their login with a one-time password)</label>
+    <div class="rowbtns" style="align-items:end">
+      <input type="email" name="email" required style="max-width:340px">
+      <button class="btn sm" type="submit">Set / reset client login</button>
+    </div>
+  </form>
+</div>
+
+<h2>Reports</h2>
+{% if latest %}
+<div class="grid c3">
+  <div class="card"><h3>📕 Client report (PDF)</h3><p class="small">Branded deliverable — cover, summary, findings, evidence.</p>
+    <a class="btn sm" target="_blank" href="/companies/{{ c.id }}/report/{{ latest.scan_id }}">Open &amp; save as PDF</a></div>
+  <div class="card"><h3>🗂 History</h3><p class="small">Every assessment with date &amp; score; reopen or compare.</p>
+    <a class="btn sm gray" href="/companies/{{ c.id }}/history">Open history</a></div>
+</div>
+<p class="small">Latest {{ latest.scan_id }} · rulebook v{{ latest.rulebook_version }} · {{ snaps|length }} on file.</p>
+{% else %}
+<p class="small">No assessment has run yet.</p>
+{% endif %}
+{% endblock %}

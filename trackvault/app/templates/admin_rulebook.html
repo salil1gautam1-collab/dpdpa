@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Rulebook{% endblock %}
+{% block body %}
+<h1>Rulebook — the law, as data <span class="small">(CS / Legal)</span></h1>
+<p class="small">When MeitY updates the DPDP framework, import a new version here. Existing assessments are
+untouched; the next assessment a company runs uses the latest version. Nothing changes silently.</p>
+<div class="overflow">
+<table>
+  <tr><th>Version</th><th>Controls</th><th>Categories</th><th>Updated</th><th>Source</th></tr>
+  {% for rb in books %}
+  <tr>
+    <td><b>v{{ rb.version }}</b>{% if current and rb.version == current.version %} · current{% endif %}</td>
+    <td>{{ rb.data.controls|length }}</td><td>{{ rb.data.categories|length }}</td>
+    <td class="small">{{ rb.data.get('lastUpdated','') }}</td><td class="small">{{ rb.source }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+
+<h2>Append new checkpoints</h2>
+<div class="card">
+  <p class="small">Paste new control objects (a JSON array). They are appended to the current rulebook as a new
+  version. Each control needs at least <code>id, category, severity, title, checkMethod</code>.</p>
+  <form method="post" action="/admin/rulebook/append">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>New version number</label><input type="text" name="version" value="{{ next_version }}">
+    <label>New controls (JSON array)</label>
+    <textarea name="controls" rows="6" placeholder='[{"id":"NT-07","category":"NT","severity":"medium","title":"...","legalRef":"...","description":"...","checkMethod":"questionnaire","remediation":"...","appAssist":{"possible":true,"how":"..."}}]'></textarea>
+    <label>Note (what changed &amp; why)</label><input type="text" name="note">
+    <p style="margin-top:12px"><button class="btn green" type="submit">Append &amp; publish new version</button></p>
+  </form>
+</div>
+
+<h2>Import a full rulebook</h2>
+<div class="card">
+  <form method="post" action="/admin/rulebook/import">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <textarea name="rulebook" rows="5" placeholder='{"rulebookVersion":"5.0.0","categories":[...],"controls":[...]}'></textarea>
+    <p style="margin-top:12px"><button class="btn" type="submit">Validate &amp; import</button></p>
+  </form>
+</div>
+{% endblock %}

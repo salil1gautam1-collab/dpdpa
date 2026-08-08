@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block body %}
+<p class="small"><a href="{{ back }}">← back</a></p>
+<h1>Assessment history — {{ c.name }}</h1>
+<p class="small">Every assessment is retained with its date and reopens from its immutable snapshot.</p>
+<div class="overflow">
+<table>
+  <tr><th>Scan ID (UTC)</th><th>Score</th><th>Breakdown</th><th>Rulebook</th><th>Report</th></tr>
+  {% for s in snaps %}
+  <tr>
+    <td class="tag">{{ s.scan_id }}</td>
+    <td><b>{{ s.score }}%</b></td>
+    <td class="small">gaps {{ s.counts.GAP }} · partial {{ s.counts.PARTIAL }} · TBC {{ s.counts.TBC }}</td>
+    <td class="small">v{{ s.rulebook_version }}</td>
+    <td><a class="btn sm" target="_blank" href="/companies/{{ c.id }}/report/{{ s.scan_id }}">Open</a></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="small">No assessments yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+{% if snaps|length >= 2 %}
+<h2>Compare two reports</h2>
+<div class="card">
+  <form method="get" action="/companies/{{ c.id }}/compare">
+    <div class="rowbtns" style="align-items:end">
+      <div><label>Report A (baseline)</label>
+        <select name="a">{% for s in snaps %}<option value="{{ s.scan_id }}">{{ s.scan_id }} · {{ s.score }}%</option>{% endfor %}</select></div>
+      <div><label>Report B</label>
+        <select name="b">{% for s in snaps %}<option value="{{ s.scan_id }}">{{ s.scan_id }} · {{ s.score }}%</option>{% endfor %}</select></div>
+      <button class="btn" type="submit">Compare →</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

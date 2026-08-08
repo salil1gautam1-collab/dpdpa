@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block body %}
+<h1>Users &amp; roles</h1>
+<p class="small">Operator staff for your organisation. Roles: admin (full), cs / legal (rulebook &amp; governance),
+analyst (runs assessments), viewer (read-only), client (external customer).</p>
+<div class="overflow">
+<table>
+  <tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr>
+  {% for u in users %}
+  <tr>
+    <td>{{ u.email }}</td><td>{{ u.name }}</td>
+    <td><span class="pill admin">{{ u.role.value }}</span></td>
+    <td>{{ 'active' if u.is_active else 'disabled' }}{% if u.must_change_password %} · must reset{% endif %}</td>
+    <td class="small">{{ u.last_login_at.strftime('%Y-%m-%d %H:%M') if u.last_login_at else '—' }}</td>
+    <td>
+      {% if u.id != user.id %}
+      <form method="post" action="/admin/users/{{ u.id }}/toggle" class="inline">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn sm gray">{{ 'Disable' if u.is_active else 'Enable' }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+
+<h2>Add operator user</h2>
+<div class="card">
+  <form method="post" action="/admin/users/create">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Email</label><input type="email" name="email" required>
+    <label>Name</label><input type="text" name="name">
+    <label>Role</label>
+    <select name="role">
+      {% for r in roles %}{% if r != 'client' %}<option value="{{ r }}">{{ r }}</option>{% endif %}{% endfor %}
+    </select>
+    <p style="margin-top:14px"><button class="btn green" type="submit">Create user</button></p>
+    <p class="small">A one-time temporary password is generated and shown once; the user must change it on first login.</p>
+  </form>
+</div>
+{% endblock %}

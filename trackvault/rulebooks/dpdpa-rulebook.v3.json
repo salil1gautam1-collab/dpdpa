@@ -1,0 +1,1317 @@
+{
+  "rulebookVersion": "3.0.0",
+  "law": "Digital Personal Data Protection Act, 2023 (India) + DPDP Rules, 2025 (notified 14 Nov 2025)",
+  "phasedEnforcement": [
+    "2025-11-14",
+    "2026-11-14",
+    "2027-05-13"
+  ],
+  "lastUpdated": "2026-08-09",
+  "updateNote": "v3.0.0 adds Azure (AZR), Endpoint/Intune (EP) and Google Cloud (GCP) posture categories, resolved automatically by their read-only connectors. v2.0.0 adds the CLD (Cloud Posture) category, resolved automatically by the AWS connector (docs/INFRA-SCANNER-SPEC.md). When MeitY notifies amendments, publish a new rulebook version file (v2, v3...). The engine re-evaluates all clients against the new version and the diff engine reports newly-introduced checkpoints as TBC, never silently.",
+  "statusValues": {
+    "COMPLIANT": "Checkpoint satisfied, with evidence recorded",
+    "PARTIAL": "Some but not all elements satisfied; evidence shows both",
+    "GAP": "Checkpoint applicable and not satisfied; evidence of absence recorded",
+    "NA": "Not applicable to this organisation, with the reason recorded",
+    "TBC": "Applicable but insufficient evidence to determine; needs manual input"
+  },
+  "severities": [
+    "critical",
+    "high",
+    "medium",
+    "low"
+  ],
+  "checkMethods": {
+    "web": "Determined automatically by the website/app scanner",
+    "questionnaire": "Determined from structured departmental questionnaire answers",
+    "evidence": "Determined by a human uploading/attaching evidence (document, screenshot, register)",
+    "hybrid": "Automated signal exists but manual confirmation is required to mark COMPLIANT"
+  },
+  "categories": [
+    {
+      "id": "NT",
+      "name": "Notice & Transparency",
+      "legalRef": "DPDPA s.5; Rule 3"
+    },
+    {
+      "id": "CN",
+      "name": "Consent",
+      "legalRef": "DPDPA s.6; Rule 4"
+    },
+    {
+      "id": "CK",
+      "name": "Cookies, Tracking & Online Consent",
+      "legalRef": "DPDPA s.5-6 applied to online tracking"
+    },
+    {
+      "id": "CH",
+      "name": "Children's Data",
+      "legalRef": "DPDPA s.9; Rule 10-11"
+    },
+    {
+      "id": "DR",
+      "name": "Data Principal Rights",
+      "legalRef": "DPDPA s.11-14; Rule 13"
+    },
+    {
+      "id": "SEC",
+      "name": "Security Safeguards",
+      "legalRef": "DPDPA s.8(5); Rule 6"
+    },
+    {
+      "id": "BR",
+      "name": "Breach Preparedness & Notification",
+      "legalRef": "DPDPA s.8(6); Rule 7"
+    },
+    {
+      "id": "RET",
+      "name": "Retention & Erasure",
+      "legalRef": "DPDPA s.8(7)-(8); Rule 8"
+    },
+    {
+      "id": "PR",
+      "name": "Processors & Third-Party Sharing",
+      "legalRef": "DPDPA s.8(2); Rule 6(4)"
+    },
+    {
+      "id": "XB",
+      "name": "Cross-Border Transfers",
+      "legalRef": "DPDPA s.16; Rule 15"
+    },
+    {
+      "id": "GOV",
+      "name": "Governance & Accountability",
+      "legalRef": "DPDPA s.8; Rule 9"
+    },
+    {
+      "id": "SDF",
+      "name": "Significant Data Fiduciary (conditional)",
+      "legalRef": "DPDPA s.10; Rule 12"
+    },
+    {
+      "id": "WEB",
+      "name": "Technical Web Hygiene (supports SEC)",
+      "legalRef": "Evidence toward s.8(5) reasonable safeguards"
+    },
+    {
+      "id": "CLD",
+      "name": "Cloud Posture (automated via connectors)",
+      "legalRef": "DPDPA s.8(5); Rule 6 applied to cloud infrastructure"
+    },
+    {
+      "id": "AZR",
+      "name": "Azure Posture (automated via connector)",
+      "legalRef": "DPDPA s.8(5); Rule 6 applied to Azure"
+    },
+    {
+      "id": "EP",
+      "name": "Endpoint & Antivirus Posture (automated via Intune/Defender)",
+      "legalRef": "DPDPA s.8(5); Rule 6(1)(a)-(c)"
+    },
+    {
+      "id": "GCP",
+      "name": "Google Cloud Posture (automated via connector)",
+      "legalRef": "DPDPA s.8(5); Rule 6 applied to GCP"
+    }
+  ],
+  "controls": [
+    {
+      "id": "NT-01",
+      "category": "NT",
+      "severity": "critical",
+      "title": "Privacy notice exists and is reachable",
+      "legalRef": "s.5(1)",
+      "description": "A privacy notice/policy is published and linked from every data-collection surface (website footer, app, forms).",
+      "checkMethod": "web",
+      "webCheckId": "privacy_policy_present",
+      "evidenceRequired": "URL of notice; link locations",
+      "remediation": "Publish a DPDPA-aligned privacy notice and link it site-wide and in-app.",
+      "appAssist": {
+        "possible": true,
+        "how": "Generate a notice draft from the data inventory for counsel review"
+      }
+    },
+    {
+      "id": "NT-02",
+      "category": "NT",
+      "severity": "critical",
+      "title": "Notice itemises personal data and purposes",
+      "legalRef": "s.5(1)(i); Rule 3(b)",
+      "description": "The notice gives an itemised description of the personal data collected and the specified purposes, and lists the goods/services enabled by processing.",
+      "checkMethod": "hybrid",
+      "webCheckId": "privacy_policy_content",
+      "evidenceRequired": "Notice text sections mapped to the actual data inventory",
+      "remediation": "Rewrite notice per-purpose with an itemised data list matching the live inventory.",
+      "appAssist": {
+        "possible": true,
+        "how": "Cross-check notice text against discovered data categories and flag mismatches"
+      }
+    },
+    {
+      "id": "NT-03",
+      "category": "NT",
+      "severity": "high",
+      "title": "Notice explains how to exercise rights and complain to the Board",
+      "legalRef": "s.5(1)(ii)-(iii); Rule 3(c)",
+      "description": "Notice describes how to withdraw consent, exercise rights, and make a complaint to the Data Protection Board of India.",
+      "checkMethod": "hybrid",
+      "webCheckId": "privacy_policy_content",
+      "evidenceRequired": "Relevant notice sections",
+      "remediation": "Add rights, withdrawal and Board-complaint sections with working links.",
+      "appAssist": {
+        "possible": true,
+        "how": "Template clauses supplied for counsel review"
+      }
+    },
+    {
+      "id": "NT-04",
+      "category": "NT",
+      "severity": "high",
+      "title": "Notice available in English and the 22 Eighth-Schedule languages",
+      "legalRef": "s.5(3)",
+      "description": "Data principals can access the notice in English or any language in the Eighth Schedule of the Constitution.",
+      "checkMethod": "hybrid",
+      "webCheckId": "notice_languages",
+      "evidenceRequired": "Language selector / translated notice URLs",
+      "remediation": "Publish translated notices or an on-demand language mechanism.",
+      "appAssist": {
+        "possible": true,
+        "how": "Track translation coverage; machine-draft translations for human review"
+      }
+    },
+    {
+      "id": "NT-05",
+      "category": "NT",
+      "severity": "high",
+      "title": "Notice served at or before collection, and to legacy data principals",
+      "legalRef": "s.5(1)-(2)",
+      "description": "Notice is presented at/before each collection point; data principals whose consent predates DPDPA have been served the notice 'as soon as reasonably practicable'.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Screenshots of collection points; record of legacy-notice campaign",
+      "remediation": "Embed notice link at each form/IVR script; run a one-time legacy notice campaign (email/SMS).",
+      "appAssist": {
+        "possible": true,
+        "how": "Detect forms lacking a notice link; track legacy-campaign evidence"
+      }
+    },
+    {
+      "id": "NT-06",
+      "category": "NT",
+      "severity": "medium",
+      "title": "Proof of the exact notice version served",
+      "legalRef": "s.5 read with s.8 accountability",
+      "description": "The organisation can prove which version of the notice was shown at the time of each collection.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Notice version log linked to consent records",
+      "remediation": "Version notices; store notice-version id with every consent record.",
+      "appAssist": {
+        "possible": true,
+        "how": "Notice version registry with hashes and effective dates"
+      }
+    },
+    {
+      "id": "CN-01",
+      "category": "CN",
+      "severity": "critical",
+      "title": "Consent is free, specific, informed, unconditional and unambiguous",
+      "legalRef": "s.6(1)",
+      "description": "Consent is collected by clear affirmative action, per specified purpose, limited to data necessary for that purpose.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Consent UX screenshots per channel; consent record schema",
+      "remediation": "Redesign consent capture per-purpose; remove bundled/generic consent.",
+      "appAssist": {
+        "possible": true,
+        "how": "Purpose registry + per-purpose consent state model"
+      }
+    },
+    {
+      "id": "CN-02",
+      "category": "CN",
+      "severity": "critical",
+      "title": "Consent captured on all web/app forms",
+      "legalRef": "s.6(1)",
+      "description": "Every form collecting personal data has an unticked, explicit consent control with a notice link.",
+      "checkMethod": "hybrid",
+      "webCheckId": "forms_consent",
+      "evidenceRequired": "Per-form scan evidence (form URL, fields, consent control present/absent)",
+      "remediation": "Add a consent widget to every collecting form; no pre-ticked boxes.",
+      "appAssist": {
+        "possible": true,
+        "how": "Scanner enumerates forms and flags missing consent controls on each re-scan"
+      }
+    },
+    {
+      "id": "CN-03",
+      "category": "CN",
+      "severity": "high",
+      "title": "Verbal / assisted-channel consent is recorded and retrievable",
+      "legalRef": "s.6 read with s.8(9) grievance/accountability",
+      "description": "Consent captured by phone, IVR, callbot, email or agents is timestamped, stored and retrievable against the data principal record.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Sample retrieval of a verbal consent record (call id, timestamp, purpose)",
+      "remediation": "Log consent events from telephony systems into a consent register keyed by data principal.",
+      "appAssist": {
+        "possible": true,
+        "how": "Consent register API accepting IVR/dialer webhook events"
+      }
+    },
+    {
+      "id": "CN-04",
+      "category": "CN",
+      "severity": "critical",
+      "title": "Withdrawal is as easy as giving consent",
+      "legalRef": "s.6(4)",
+      "description": "A data principal can withdraw consent with comparable ease; withdrawal ceases processing (except where another lawful ground exists).",
+      "checkMethod": "hybrid",
+      "webCheckId": "withdrawal_mechanism",
+      "evidenceRequired": "Withdrawal UX; processing-stop evidence",
+      "remediation": "Provide self-serve withdrawal per purpose.",
+      "appAssist": {
+        "possible": true,
+        "how": "Hosted preference/withdrawal page + downstream suppression signal"
+      }
+    },
+    {
+      "id": "CN-05",
+      "category": "CN",
+      "severity": "high",
+      "title": "Withdrawal propagates to downstream systems and processors",
+      "legalRef": "s.6(6)",
+      "description": "On withdrawal, the fiduciary and its processors cease processing within a reasonable time; suppression reaches CRM, marketing, SMS/WhatsApp/email tools.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Suppression logs across downstream tools for a test withdrawal",
+      "remediation": "Automate withdrawal fan-out via API/webhooks to all processors.",
+      "appAssist": {
+        "possible": true,
+        "how": "Webhook fan-out with delivery receipts as evidence"
+      }
+    },
+    {
+      "id": "CN-06",
+      "category": "CN",
+      "severity": "high",
+      "title": "Immutable consent log",
+      "legalRef": "s.6 read with s.8",
+      "description": "Every consent event (grant, refusal, withdrawal) is logged with timestamp, purpose, notice version, channel/source, and is tamper-evident.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Consent log schema + sample records + integrity mechanism",
+      "remediation": "Append-only consent ledger with hash chaining.",
+      "appAssist": {
+        "possible": true,
+        "how": "Provides the append-only ledger with hash chaining"
+      }
+    },
+    {
+      "id": "CN-07",
+      "category": "CN",
+      "severity": "medium",
+      "title": "Consent Manager interoperability readiness",
+      "legalRef": "s.6(7)-(9); Rule 4",
+      "description": "Where a data principal uses a registered Consent Manager, the fiduciary can receive/honour consent signals through it (framework operationalising during 2026).",
+      "checkMethod": "evidence",
+      "evidenceRequired": "Integration assessment or roadmap",
+      "remediation": "Assess Consent Manager APIs when registration opens; plan integration.",
+      "appAssist": {
+        "possible": true,
+        "how": "Tracks readiness item; adapter layer planned in roadmap"
+      }
+    },
+    {
+      "id": "CN-08",
+      "category": "CN",
+      "severity": "high",
+      "title": "Processing limited to consented purpose",
+      "legalRef": "s.6(1) proviso; s.4",
+      "description": "Downstream processes (enrichment, campaigns, verification) check consent state for the specific purpose before processing.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Purpose-check integration evidence in downstream systems",
+      "remediation": "Gate downstream jobs on per-purpose consent lookups.",
+      "appAssist": {
+        "possible": true,
+        "how": "Consent-state lookup API for downstream systems"
+      }
+    },
+    {
+      "id": "CK-01",
+      "category": "CK",
+      "severity": "critical",
+      "title": "Cookie consent banner / CMP present",
+      "legalRef": "s.5-6 applied to tracking",
+      "description": "Sites and online catalogs present a consent mechanism before non-essential cookies/trackers fire; visitors can accept or decline.",
+      "checkMethod": "web",
+      "webCheckId": "cmp_present",
+      "evidenceRequired": "Scan evidence: CMP script or banner markup present/absent",
+      "remediation": "Deploy a CMP with granular categories across web, catalogs, app.",
+      "appAssist": {
+        "possible": true,
+        "how": "Detects CMP presence and category granularity on every scan"
+      }
+    },
+    {
+      "id": "CK-02",
+      "category": "CK",
+      "severity": "high",
+      "title": "No non-essential cookies/trackers before consent",
+      "legalRef": "s.6(1)",
+      "description": "Analytics/advertising cookies and pixels do not fire until affirmative consent.",
+      "checkMethod": "web",
+      "webCheckId": "pre_consent_cookies",
+      "evidenceRequired": "Cookies and tracker scripts observed on first uncooked request",
+      "remediation": "Configure tag manager to hold tags until consent signal.",
+      "appAssist": {
+        "possible": true,
+        "how": "First-request cookie/tracker capture as evidence each scan"
+      }
+    },
+    {
+      "id": "CK-03",
+      "category": "CK",
+      "severity": "high",
+      "title": "Consent Mode / tag governance wired to CMP",
+      "legalRef": "s.6 read with s.8(2)",
+      "description": "Google Consent Mode v2 (or equivalent) reflects the visitor's choice; declined analytics is demonstrably suppressed.",
+      "checkMethod": "hybrid",
+      "webCheckId": "consent_mode",
+      "evidenceRequired": "Consent Mode signals in page source; GA behaviour on decline",
+      "remediation": "Enable Consent Mode v2 and bind to CMP categories.",
+      "appAssist": {
+        "possible": true,
+        "how": "Detects gtag consent defaults in page source"
+      }
+    },
+    {
+      "id": "CK-04",
+      "category": "CK",
+      "severity": "medium",
+      "title": "Cookie inventory documented with purposes",
+      "legalRef": "s.5(1)(i)",
+      "description": "A cookie register lists each cookie, purpose class (auth/functional/analytics/ads) and duration; the notice reflects it.",
+      "checkMethod": "hybrid",
+      "webCheckId": "cookie_inventory",
+      "evidenceRequired": "Observed cookies vs documented register",
+      "remediation": "Maintain the cookie register; auto-reconcile against scans.",
+      "appAssist": {
+        "possible": true,
+        "how": "Auto-builds observed-cookie list and diffs against the register"
+      }
+    },
+    {
+      "id": "CK-05",
+      "category": "CK",
+      "severity": "medium",
+      "title": "Mobile app consent SDK / in-app consent",
+      "legalRef": "s.5-6",
+      "description": "Android/iOS apps present notice and capture consent equivalent to web, including for device identifiers and location.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "App consent screens; SDK configuration",
+      "remediation": "Integrate a consent SDK or native consent screens in both apps.",
+      "appAssist": {
+        "possible": false,
+        "how": "Verification via evidence upload; automated app scanning on roadmap"
+      }
+    },
+    {
+      "id": "CH-01",
+      "category": "CH",
+      "severity": "high",
+      "title": "Age position assessed and documented",
+      "legalRef": "s.9(1); Rule 10",
+      "description": "The organisation has determined whether it processes children's (<18) data and documented its age-assurance approach (a B2B platform can document why exposure is low, plus mitigations).",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Documented age-assurance assessment",
+      "remediation": "Document the B2B position; add age declaration where sign-up is open.",
+      "appAssist": {
+        "possible": true,
+        "how": "Assessment template + evidence tracking"
+      }
+    },
+    {
+      "id": "CH-02",
+      "category": "CH",
+      "severity": "high",
+      "title": "Verifiable parental consent where children's data is processed",
+      "legalRef": "s.9(1); Rule 10",
+      "description": "If children's data is knowingly processed, verifiable parental consent is obtained (DigiLocker/identity-based verification per Rule 10).",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Parental consent flow evidence",
+      "remediation": "Implement verifiable parental consent or restrict under-18 access.",
+      "appAssist": {
+        "possible": false,
+        "how": "Tracked as evidence item; implementation is client-side"
+      }
+    },
+    {
+      "id": "CH-03",
+      "category": "CH",
+      "severity": "medium",
+      "title": "No tracking/behavioural ads targeted at children",
+      "legalRef": "s.9(3)",
+      "description": "No behavioural monitoring or targeted advertising directed at children.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Ad-platform audience settings; policy statement",
+      "remediation": "Exclude minors from ad audiences; document settings.",
+      "appAssist": {
+        "possible": false,
+        "how": "Evidence tracking only"
+      }
+    },
+    {
+      "id": "DR-01",
+      "category": "DR",
+      "severity": "critical",
+      "title": "Formal DSR intake channel published",
+      "legalRef": "s.11-14; Rule 13",
+      "description": "A published, findable channel exists for access, correction, erasure and withdrawal requests, with the mechanism described in the notice.",
+      "checkMethod": "hybrid",
+      "webCheckId": "dsr_channel",
+      "evidenceRequired": "DSR page/email discoverable on site; notice reference",
+      "remediation": "Publish a DSR portal or dedicated channel with identity verification.",
+      "appAssist": {
+        "possible": true,
+        "how": "Hosted DSR intake form + register"
+      }
+    },
+    {
+      "id": "DR-02",
+      "category": "DR",
+      "severity": "high",
+      "title": "DSR workflow with register, identity verification and SLA tracking",
+      "legalRef": "s.11-13; Rule 13(3)",
+      "description": "Requests are logged in a register, identity-verified, routed to system owners and answered within the published timeline (Rules require stated response timelines; DSR responses within 90 days).",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "DSR register extract; SLA metrics",
+      "remediation": "Stand up a DSR workflow with SLA clocks and audit trail.",
+      "appAssist": {
+        "possible": true,
+        "how": "Provides DSR register with SLA tracking and evidence export"
+      }
+    },
+    {
+      "id": "DR-03",
+      "category": "DR",
+      "severity": "high",
+      "title": "Access request delivers a complete response pack",
+      "legalRef": "s.11",
+      "description": "A data principal receives a summary of their personal data, processing activities, and the identities of fiduciaries/processors with whom it was shared.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Sample (dummy) access response pack",
+      "remediation": "Automate data retrieval across systems for access requests.",
+      "appAssist": {
+        "possible": true,
+        "how": "Response-pack assembly checklist per system of record"
+      }
+    },
+    {
+      "id": "DR-04",
+      "category": "DR",
+      "severity": "high",
+      "title": "Erasure executed across systems and processors with evidence",
+      "legalRef": "s.12(3); s.8(7)",
+      "description": "Erasure requests propagate to every system of record and processor; completion is evidenced (closure certificate).",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Erasure task trail for a test request",
+      "remediation": "Map systems holding personal data; route erasure tasks with owner sign-off.",
+      "appAssist": {
+        "possible": true,
+        "how": "Erasure task routing + closure certificate generation"
+      }
+    },
+    {
+      "id": "DR-05",
+      "category": "DR",
+      "severity": "medium",
+      "title": "Grievance redressal published with response timeline",
+      "legalRef": "s.13; Rule 13",
+      "description": "A grievance mechanism with a stated response period is published; escalation to the Board is explained.",
+      "checkMethod": "hybrid",
+      "webCheckId": "grievance_contact",
+      "evidenceRequired": "Grievance page/contact discoverable; stated timelines",
+      "remediation": "Publish grievance contact and timelines on site and in notice.",
+      "appAssist": {
+        "possible": true,
+        "how": "Detects grievance contact presence on each scan"
+      }
+    },
+    {
+      "id": "DR-06",
+      "category": "DR",
+      "severity": "low",
+      "title": "Nomination facility offered",
+      "legalRef": "s.14",
+      "description": "Data principals can nominate another individual to exercise rights in case of death or incapacity.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Nomination mechanism description",
+      "remediation": "Add nomination option to the DSR/preference surface.",
+      "appAssist": {
+        "possible": true,
+        "how": "Nomination field in hosted DSR portal"
+      }
+    },
+    {
+      "id": "SEC-01",
+      "category": "SEC",
+      "severity": "critical",
+      "title": "Reasonable security safeguards implemented and documented",
+      "legalRef": "s.8(5); Rule 6(1)",
+      "description": "Documented safeguards covering the Rule 6 minimum: encryption/obfuscation/masking or virtual tokens; access control; logging & monitoring; backups; and contractual safeguards with processors.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Security policy; control implementation evidence",
+      "remediation": "Adopt and evidence the Rule 6 minimum control set.",
+      "appAssist": {
+        "possible": true,
+        "how": "Control checklist with per-control evidence attachments"
+      }
+    },
+    {
+      "id": "SEC-02",
+      "category": "SEC",
+      "severity": "high",
+      "title": "Encryption at rest and in transit for personal data",
+      "legalRef": "Rule 6(1)(a)",
+      "description": "Personal data stores and transports are encrypted (TLS in transit; disk/db/file encryption at rest) or tokenised/masked.",
+      "checkMethod": "hybrid",
+      "webCheckId": "tls_quality",
+      "evidenceRequired": "TLS scan evidence; at-rest encryption attestation per store",
+      "remediation": "Enforce TLS everywhere; enable at-rest encryption on databases, buckets, backups.",
+      "appAssist": {
+        "possible": true,
+        "how": "External TLS verification; at-rest tracked via evidence"
+      }
+    },
+    {
+      "id": "SEC-03",
+      "category": "SEC",
+      "severity": "high",
+      "title": "Role-based access control incl. outsourced workforce",
+      "legalRef": "Rule 6(1)(b)",
+      "description": "Access to personal data is role-restricted with authentication, covering employees, BPO partners and channel partners; access is reviewed periodically.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "RBAC matrix; last access-review record incl. third parties",
+      "remediation": "Implement RBAC uniformly; quarterly access reviews including partners.",
+      "appAssist": {
+        "possible": true,
+        "how": "Access-review workflow with attestation records"
+      }
+    },
+    {
+      "id": "SEC-04",
+      "category": "SEC",
+      "severity": "high",
+      "title": "Logging, monitoring and 1-year log retention",
+      "legalRef": "Rule 6(1)(c),(e)",
+      "description": "Access/processing logs are kept and monitored to detect unauthorised access; logs retained at least one year.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Log retention config; monitoring/alerting evidence",
+      "remediation": "Centralise logs, set >=1y retention, add anomaly alerts.",
+      "appAssist": {
+        "possible": true,
+        "how": "Retention checklist; scan verifies public endpoints only"
+      }
+    },
+    {
+      "id": "SEC-05",
+      "category": "SEC",
+      "severity": "medium",
+      "title": "Backups and continuity for personal data",
+      "legalRef": "Rule 6(1)(d)",
+      "description": "Backups enable continued processing in case of destruction/loss; restore is tested.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Backup policy; last restore test",
+      "remediation": "Schedule backups; run and record restore tests.",
+      "appAssist": {
+        "possible": true,
+        "how": "Evidence tracking with recurring reminders"
+      }
+    },
+    {
+      "id": "SEC-06",
+      "category": "SEC",
+      "severity": "medium",
+      "title": "Maker-checker approval for changes to customer data",
+      "legalRef": "s.8(3)-(4) accuracy; s.8(5)",
+      "description": "Changes/amendments to customer records follow a documented approval flow with an audit trail.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Approval workflow doc; sample audit trail",
+      "remediation": "Introduce maker-checker workflow on data-change requests.",
+      "appAssist": {
+        "possible": true,
+        "how": "Configurable approval workflow module (roadmap)"
+      }
+    },
+    {
+      "id": "BR-01",
+      "category": "BR",
+      "severity": "critical",
+      "title": "Breach response documented and rehearsed",
+      "legalRef": "s.8(6); Rule 7",
+      "description": "A written incident-response process exists, with roles, severity assessment and departmental rehearsal.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "IR plan; drill record",
+      "remediation": "Adopt an IR plan; run a tabletop drill.",
+      "appAssist": {
+        "possible": true,
+        "how": "Incident register + drill tracker"
+      }
+    },
+    {
+      "id": "BR-02",
+      "category": "BR",
+      "severity": "critical",
+      "title": "Board and data-principal breach notification capability",
+      "legalRef": "Rule 7",
+      "description": "On becoming aware of a breach: intimate affected data principals without delay (plain-language description, mitigation, contact), notify the Board without delay, and file the detailed report within 72 hours.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Notification templates; contact data readiness; register",
+      "remediation": "Prepare Board + data-principal templates and a tested dispatch path.",
+      "appAssist": {
+        "possible": true,
+        "how": "Generates statutory notification drafts from the incident register"
+      }
+    },
+    {
+      "id": "RET-01",
+      "category": "RET",
+      "severity": "critical",
+      "title": "Documented retention schedule per data category",
+      "legalRef": "s.8(7); Rule 8",
+      "description": "A retention schedule states, per category/purpose, how long personal data is kept and the erasure trigger; 'until deletion request' alone is not a schedule.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Retention schedule document",
+      "remediation": "Publish a retention schedule; map every store to it.",
+      "appAssist": {
+        "possible": true,
+        "how": "Retention schedule builder tied to the data inventory"
+      }
+    },
+    {
+      "id": "RET-02",
+      "category": "RET",
+      "severity": "high",
+      "title": "Erasure on purpose-served or consent withdrawal",
+      "legalRef": "s.8(7)(a); Rule 8",
+      "description": "Personal data is erased (and processors instructed to erase) when purpose is served and retention is no longer legally required. Class-notified fiduciaries (e-commerce/social/gaming above thresholds) must erase after 3 years of user inactivity with 48-hour prior notice.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Deletion job evidence; 48h notice mechanism if in scope",
+      "remediation": "Implement automated deletion runs with logs; add pre-erasure notice if class-notified.",
+      "appAssist": {
+        "possible": true,
+        "how": "Deletion-evidence register; inactivity clock tracking"
+      }
+    },
+    {
+      "id": "RET-03",
+      "category": "RET",
+      "severity": "medium",
+      "title": "Deletion evidence retained",
+      "legalRef": "s.8 accountability",
+      "description": "Each deletion run produces evidence (what category, which systems, when, by whom) suitable for audit.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Deletion logs/certificates",
+      "remediation": "Log deletion runs; retain certificates.",
+      "appAssist": {
+        "possible": true,
+        "how": "Deletion certificate generation"
+      }
+    },
+    {
+      "id": "PR-01",
+      "category": "PR",
+      "severity": "critical",
+      "title": "Valid contracts (DPAs) with every processor",
+      "legalRef": "s.8(2); Rule 6(4)",
+      "description": "Every processor (cloud, comms, analytics, BPO, channel partners) operates under a valid contract requiring security safeguards and data protection obligations with liability flow-down.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Processor register with DPA status per processor",
+      "remediation": "Execute/refresh DPAs for all processors; track expiry.",
+      "appAssist": {
+        "possible": true,
+        "how": "Processor register with DPA status, risk score and review reminders"
+      }
+    },
+    {
+      "id": "PR-02",
+      "category": "PR",
+      "severity": "high",
+      "title": "Processor register maintained as a living record",
+      "legalRef": "s.8(2) read with s.10-style accountability",
+      "description": "A register lists each processor, data shared, purpose, location, and review date; new tools enter the register before go-live.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Register extract; last review date",
+      "remediation": "Adopt the register; wire procurement to it.",
+      "appAssist": {
+        "possible": true,
+        "how": "This tool maintains the register and diffs observed trackers/vendors against it"
+      }
+    },
+    {
+      "id": "PR-03",
+      "category": "PR",
+      "severity": "high",
+      "title": "No sale/rent of personal data; sharing limited to lawful bases",
+      "legalRef": "s.4, s.6",
+      "description": "Personal data is shared only with consented/lawful recipients; observed third-party scripts and data flows reconcile to the register.",
+      "checkMethod": "hybrid",
+      "webCheckId": "trackers_found",
+      "evidenceRequired": "Observed third parties on scan vs register",
+      "remediation": "Remove unregistered trackers; document each observed third party.",
+      "appAssist": {
+        "possible": true,
+        "how": "Every scan reconciles observed third parties against the register"
+      }
+    },
+    {
+      "id": "PR-04",
+      "category": "PR",
+      "severity": "medium",
+      "title": "Erasure/withdrawal instructions flow to processors",
+      "legalRef": "s.8(7)(b); s.6(6)",
+      "description": "Processors demonstrably receive and honour erasure and suppression instructions.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Processor confirmation records for a test instruction",
+      "remediation": "Add erasure/suppression clauses and API hooks per processor.",
+      "appAssist": {
+        "possible": true,
+        "how": "Instruction dispatch log with delivery receipts"
+      }
+    },
+    {
+      "id": "XB-01",
+      "category": "XB",
+      "severity": "high",
+      "title": "Cross-border transfer register with basis",
+      "legalRef": "s.16; Rule 15",
+      "description": "Transfers of personal data outside India (incl. international buyer/seller matching) are recorded with country, recipient, category and basis; restricted-country notifications are checked.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Transfer register extract",
+      "remediation": "Create the transfer register; add a restricted-country check to the flow.",
+      "appAssist": {
+        "possible": true,
+        "how": "Transfer register with country-restriction lookups against notified lists"
+      }
+    },
+    {
+      "id": "XB-02",
+      "category": "XB",
+      "severity": "medium",
+      "title": "Government-notified transfer conditions honoured",
+      "legalRef": "s.16(1); Rule 15",
+      "description": "Any conditions/notified restrictions on transfer (including sector-specific and SDF localisation orders) are identified and applied.",
+      "checkMethod": "evidence",
+      "evidenceRequired": "Assessment note against current notifications",
+      "remediation": "Monitor MeitY notifications; reflect in transfer rules.",
+      "appAssist": {
+        "possible": true,
+        "how": "Rulebook updates propagate notified changes to this checkpoint"
+      }
+    },
+    {
+      "id": "GOV-01",
+      "category": "GOV",
+      "severity": "critical",
+      "title": "Published contact for data protection questions",
+      "legalRef": "s.8(9); Rule 9",
+      "description": "The business publishes (site + notice) the contact details of the person who answers questions about processing — the DPO where required.",
+      "checkMethod": "hybrid",
+      "webCheckId": "grievance_contact",
+      "evidenceRequired": "Contact discoverable on site and in notice",
+      "remediation": "Publish the contact on the website footer/privacy page.",
+      "appAssist": {
+        "possible": true,
+        "how": "Detects presence on each scan"
+      }
+    },
+    {
+      "id": "GOV-02",
+      "category": "GOV",
+      "severity": "high",
+      "title": "Departmental accountability map and living RoPA",
+      "legalRef": "s.8(1) accountability",
+      "description": "A maintained record maps processes, departments, systems, data categories and flows (the departmental questionnaire becomes a living record, not a one-time exercise).",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Current data-flow inventory with last-updated dates",
+      "remediation": "Adopt this tool's inventory as the living RoPA; review quarterly.",
+      "appAssist": {
+        "possible": true,
+        "how": "This tool stores and versions the inventory; re-scans flag drift"
+      }
+    },
+    {
+      "id": "GOV-03",
+      "category": "GOV",
+      "severity": "medium",
+      "title": "Compliance dashboard and management reporting",
+      "legalRef": "s.8 accountability (good practice)",
+      "description": "A cross-department view of status, open actions and evidence exists for management and audit.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "Dashboard/report samples",
+      "remediation": "Use the Phase-2 report and dashboard as the standing artefact.",
+      "appAssist": {
+        "possible": true,
+        "how": "This tool generates it"
+      }
+    },
+    {
+      "id": "GOV-04",
+      "category": "GOV",
+      "severity": "medium",
+      "title": "Employee and candidate data treated in scope",
+      "legalRef": "s.2(t) definition covers employees",
+      "description": "HR/Admin processing (payroll, attendance, recruitment, ID documents) is included in notices, retention and security controls, subject to the s.7(i) employment legitimate-use where applicable.",
+      "checkMethod": "questionnaire",
+      "evidenceRequired": "HR data inventory; employee privacy notice",
+      "remediation": "Extend inventory and notices to employee data.",
+      "appAssist": {
+        "possible": true,
+        "how": "HR questionnaire module included"
+      }
+    },
+    {
+      "id": "SDF-01",
+      "category": "SDF",
+      "severity": "high",
+      "title": "SDF status assessed",
+      "legalRef": "s.10",
+      "description": "The organisation has assessed whether it is (or is likely to be) notified as a Significant Data Fiduciary based on volume/sensitivity of data processed.",
+      "checkMethod": "evidence",
+      "applicability": "conditional — depends on notification/scale",
+      "evidenceRequired": "SDF assessment note",
+      "remediation": "Document the assessment; monitor notifications.",
+      "appAssist": {
+        "possible": true,
+        "how": "Assessment checklist"
+      }
+    },
+    {
+      "id": "SDF-02",
+      "category": "SDF",
+      "severity": "high",
+      "title": "SDF obligations if notified: DPO in India, annual DPIA + audit, algorithmic due diligence",
+      "legalRef": "s.10(2); Rule 12",
+      "description": "If notified: India-based DPO reporting to the board, independent data auditor, annual DPIA and audit with findings reported to the Board, and due diligence on algorithmic software; observe any data-localisation notifications.",
+      "checkMethod": "evidence",
+      "applicability": "conditional — only if notified as SDF",
+      "evidenceRequired": "DPO appointment; DPIA/audit reports",
+      "remediation": "Stand up SDF programme if/when notified.",
+      "appAssist": {
+        "possible": true,
+        "how": "DPIA workflow and audit evidence tracker"
+      }
+    },
+    {
+      "id": "WEB-01",
+      "category": "WEB",
+      "severity": "high",
+      "title": "HTTPS enforced (HTTP redirects to HTTPS)",
+      "legalRef": "supports s.8(5)",
+      "description": "All pages force TLS; plain-HTTP requests redirect.",
+      "checkMethod": "web",
+      "webCheckId": "https_redirect",
+      "evidenceRequired": "Redirect chain evidence",
+      "remediation": "301 all HTTP to HTTPS.",
+      "appAssist": {
+        "possible": true,
+        "how": "Verified every scan"
+      }
+    },
+    {
+      "id": "WEB-02",
+      "category": "WEB",
+      "severity": "medium",
+      "title": "HSTS enabled",
+      "legalRef": "supports s.8(5)",
+      "description": "Strict-Transport-Security header present with sensible max-age.",
+      "checkMethod": "web",
+      "webCheckId": "hsts",
+      "evidenceRequired": "Response header capture",
+      "remediation": "Add HSTS header (max-age >= 15552000).",
+      "appAssist": {
+        "possible": true,
+        "how": "Verified every scan"
+      }
+    },
+    {
+      "id": "WEB-03",
+      "category": "WEB",
+      "severity": "medium",
+      "title": "Baseline security headers",
+      "legalRef": "supports s.8(5)",
+      "description": "X-Content-Type-Options, X-Frame-Options/frame-ancestors, Referrer-Policy and a CSP are present.",
+      "checkMethod": "web",
+      "webCheckId": "security_headers",
+      "evidenceRequired": "Header capture per page",
+      "remediation": "Add missing headers at the edge/webserver.",
+      "appAssist": {
+        "possible": true,
+        "how": "Verified every scan"
+      }
+    },
+    {
+      "id": "WEB-04",
+      "category": "WEB",
+      "severity": "medium",
+      "title": "Session cookies Secure/HttpOnly",
+      "legalRef": "supports s.8(5)",
+      "description": "Cookies set by the site carry Secure and (where appropriate) HttpOnly/SameSite attributes.",
+      "checkMethod": "web",
+      "webCheckId": "cookie_flags",
+      "evidenceRequired": "Set-Cookie capture",
+      "remediation": "Set Secure/HttpOnly/SameSite on cookies.",
+      "appAssist": {
+        "possible": true,
+        "how": "Verified every scan"
+      }
+    },
+    {
+      "id": "WEB-05",
+      "category": "WEB",
+      "severity": "low",
+      "title": "No server version disclosure",
+      "legalRef": "supports s.8(5)",
+      "description": "Server/X-Powered-By headers do not expose exact software versions.",
+      "checkMethod": "web",
+      "webCheckId": "server_disclosure",
+      "evidenceRequired": "Header capture",
+      "remediation": "Suppress version tokens.",
+      "appAssist": {
+        "possible": true,
+        "how": "Verified every scan"
+      }
+    },
+    {
+      "id": "WEB-06",
+      "category": "WEB",
+      "severity": "low",
+      "title": "Terms of service published",
+      "legalRef": "good practice; supports notice framework",
+      "description": "Terms/conditions of use are published and linked.",
+      "checkMethod": "web",
+      "webCheckId": "terms_present",
+      "evidenceRequired": "Terms URL",
+      "remediation": "Publish terms page.",
+      "appAssist": {
+        "possible": true,
+        "how": "Verified every scan"
+      }
+    },
+    {
+      "id": "CLD-01",
+      "category": "CLD",
+      "severity": "high",
+      "title": "Cloud connector active with valid read-only credentials",
+      "legalRef": "s.8(5) accountability",
+      "description": "A consent-granted, least-privilege cloud connector verifies posture automatically each scan; without it, cloud checkpoints rely on declarations.",
+      "checkMethod": "web",
+      "webCheckId": "aws_credentials_valid",
+      "evidenceRequired": "Cloud API responses captured at scan time",
+      "remediation": "Connect a read-only (SecurityAudit) principal via the workspace Connectors page.",
+      "appAssist": {
+        "possible": true,
+        "how": "Automated posture verification on every scan"
+      }
+    },
+    {
+      "id": "CLD-02",
+      "category": "CLD",
+      "severity": "critical",
+      "title": "Cloud storage blocked from public access",
+      "legalRef": "Rule 6(1)(a)-(b)",
+      "description": "Account-level public-access block prevents personal-data stores from being exposed publicly.",
+      "checkMethod": "web",
+      "webCheckId": "aws_s3_public_access",
+      "evidenceRequired": "Cloud API responses captured at scan time",
+      "remediation": "Enable the account-level S3 Public Access Block (all four flags).",
+      "appAssist": {
+        "possible": true,
+        "how": "Verified every scan; regression raises an alert"
+      }
+    },
+    {
+      "id": "CLD-03",
+      "category": "CLD",
+      "severity": "high",
+      "title": "Cloud storage encrypted at rest",
+      "legalRef": "Rule 6(1)(a)",
+      "description": "Object storage holding personal data has default server-side encryption.",
+      "checkMethod": "web",
+      "webCheckId": "aws_s3_encryption",
+      "evidenceRequired": "Cloud API responses captured at scan time",
+      "remediation": "Enable default SSE (AES-256/KMS) on all buckets.",
+      "appAssist": {
+        "possible": true,
+        "how": "Per-bucket verification each scan"
+      }
+    },
+    {
+      "id": "CLD-04",
+      "category": "CLD",
+      "severity": "high",
+      "title": "Cloud audit trail enabled and logging",
+      "legalRef": "Rule 6(1)(c),(e)",
+      "description": "Account activity trail exists, is actively logging, and retention meets the one-year log requirement.",
+      "checkMethod": "web",
+      "webCheckId": "aws_cloudtrail",
+      "evidenceRequired": "Cloud API responses captured at scan time",
+      "remediation": "Enable a multi-region CloudTrail with >=1y retention on its bucket.",
+      "appAssist": {
+        "possible": true,
+        "how": "Trail status checked each scan; retention via evidence"
+      }
+    },
+    {
+      "id": "CLD-05",
+      "category": "CLD",
+      "severity": "high",
+      "title": "Network exposure restricted to intended services",
+      "legalRef": "Rule 6(1)(b)",
+      "description": "Security groups do not expose non-web ports (databases, RDP/SSH) to 0.0.0.0/0.",
+      "checkMethod": "web",
+      "webCheckId": "aws_sg_exposure",
+      "evidenceRequired": "Cloud API responses captured at scan time",
+      "remediation": "Restrict inbound rules to known CIDRs; use a bastion/VPN for admin ports.",
+      "appAssist": {
+        "possible": true,
+        "how": "Exposed-port inventory each scan"
+      }
+    },
+    {
+      "id": "CLD-06",
+      "category": "CLD",
+      "severity": "high",
+      "title": "Managed databases encrypted at rest",
+      "legalRef": "Rule 6(1)(a)",
+      "description": "Managed database instances holding personal data have storage encryption enabled.",
+      "checkMethod": "web",
+      "webCheckId": "aws_rds_encryption",
+      "evidenceRequired": "Cloud API responses captured at scan time",
+      "remediation": "Enable StorageEncrypted (requires snapshot-restore for existing instances).",
+      "appAssist": {
+        "possible": true,
+        "how": "Per-instance verification each scan"
+      }
+    },
+    {
+      "id": "CLD-07",
+      "category": "CLD",
+      "severity": "medium",
+      "title": "Cloud IAM hygiene: root MFA and key rotation",
+      "legalRef": "Rule 6(1)(b)",
+      "description": "Root account has MFA; access keys are rotated at least every 90 days.",
+      "checkMethod": "web",
+      "webCheckId": "aws_iam_hygiene",
+      "evidenceRequired": "Cloud API responses captured at scan time",
+      "remediation": "Enable root MFA; rotate stale access keys.",
+      "appAssist": {
+        "possible": true,
+        "how": "Key-age and MFA check each scan"
+      }
+    },
+    {
+      "id": "AZR-01",
+      "category": "AZR",
+      "severity": "high",
+      "title": "Azure connector active (read-only)",
+      "legalRef": "s.8(5)",
+      "description": "A consent-granted Reader/Security-Reader app verifies Azure posture automatically.",
+      "checkMethod": "web",
+      "webCheckId": "az_credentials_valid",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Register a read-only Entra app (Reader + Security Reader) and connect it.",
+      "appAssist": {
+        "possible": true,
+        "how": "Automated posture verification each scan"
+      }
+    },
+    {
+      "id": "AZR-02",
+      "category": "AZR",
+      "severity": "critical",
+      "title": "Azure storage not publicly accessible",
+      "legalRef": "Rule 6(1)(a)-(b)",
+      "description": "Storage accounts disallow anonymous blob public access.",
+      "checkMethod": "web",
+      "webCheckId": "az_storage_public",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Set allowBlobPublicAccess=false on all storage accounts.",
+      "appAssist": {
+        "possible": true,
+        "how": "Verified each scan; regression alerts"
+      }
+    },
+    {
+      "id": "AZR-03",
+      "category": "AZR",
+      "severity": "high",
+      "title": "Azure storage enforces HTTPS and TLS>=1.2",
+      "legalRef": "Rule 6(1)(a)",
+      "description": "Storage accounts require secure transport and modern TLS.",
+      "checkMethod": "web",
+      "webCheckId": "az_storage_encryption",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Enable HTTPS-only and set minimum TLS to 1.2.",
+      "appAssist": {
+        "possible": true,
+        "how": "Per-account verification each scan"
+      }
+    },
+    {
+      "id": "AZR-04",
+      "category": "AZR",
+      "severity": "high",
+      "title": "Azure network exposure restricted",
+      "legalRef": "Rule 6(1)(b)",
+      "description": "NSGs do not allow internet inbound to non-web ports.",
+      "checkMethod": "web",
+      "webCheckId": "az_nsg_exposure",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Restrict NSG inbound rules; use Bastion/VPN for admin ports.",
+      "appAssist": {
+        "possible": true,
+        "how": "Exposed-rule inventory each scan"
+      }
+    },
+    {
+      "id": "AZR-05",
+      "category": "AZR",
+      "severity": "medium",
+      "title": "Microsoft Defender for Cloud secure score",
+      "legalRef": "Rule 6(1) posture",
+      "description": "Defender for Cloud secure score reflects a maintained security posture.",
+      "checkMethod": "web",
+      "webCheckId": "az_defender_score",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Enable Defender for Cloud and act on its recommendations.",
+      "appAssist": {
+        "possible": true,
+        "how": "Score pulled each scan"
+      }
+    },
+    {
+      "id": "EP-01",
+      "category": "EP",
+      "severity": "high",
+      "title": "Endpoint connector active (Intune/Defender)",
+      "legalRef": "s.8(5)",
+      "description": "A read-only Graph app verifies endpoint posture automatically.",
+      "checkMethod": "web",
+      "webCheckId": "ep_credentials_valid",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Grant DeviceManagementManagedDevices.Read.All (application) and connect.",
+      "appAssist": {
+        "possible": true,
+        "how": "Automated endpoint verification each scan"
+      }
+    },
+    {
+      "id": "EP-02",
+      "category": "EP",
+      "severity": "medium",
+      "title": "Managed device inventory known",
+      "legalRef": "Rule 6 accountability",
+      "description": "The estate of laptops/servers under management is inventoried (counts, OS).",
+      "checkMethod": "web",
+      "webCheckId": "ep_device_inventory",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Enrol endpoints in Intune (or an MDM) so the estate is known.",
+      "appAssist": {
+        "possible": true,
+        "how": "Device inventory each scan (Phase-1 estate view)"
+      }
+    },
+    {
+      "id": "EP-03",
+      "category": "EP",
+      "severity": "high",
+      "title": "Endpoints encrypted at rest",
+      "legalRef": "Rule 6(1)(a)",
+      "description": "Managed devices holding personal data have disk encryption (BitLocker/FileVault).",
+      "checkMethod": "web",
+      "webCheckId": "ep_encryption",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Enforce disk-encryption compliance policy across devices.",
+      "appAssist": {
+        "possible": true,
+        "how": "Encryption coverage % each scan"
+      }
+    },
+    {
+      "id": "EP-04",
+      "category": "EP",
+      "severity": "high",
+      "title": "Endpoints compliant (antivirus, patching)",
+      "legalRef": "Rule 6(1)(a)-(c)",
+      "description": "Managed devices meet a compliance policy that includes active antivirus and current patches.",
+      "checkMethod": "web",
+      "webCheckId": "ep_compliance",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Define and enforce a compliance policy requiring real-time AV and patching.",
+      "appAssist": {
+        "possible": true,
+        "how": "Compliance coverage % each scan"
+      }
+    },
+    {
+      "id": "GCP-01",
+      "category": "GCP",
+      "severity": "high",
+      "title": "GCP connector active (read-only)",
+      "legalRef": "s.8(5)",
+      "description": "A consent-granted viewer/securityReviewer principal verifies GCP posture automatically.",
+      "checkMethod": "web",
+      "webCheckId": "gcp_credentials_valid",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Supply a read-only access token and project id.",
+      "appAssist": {
+        "possible": true,
+        "how": "Automated posture verification each scan"
+      }
+    },
+    {
+      "id": "GCP-02",
+      "category": "GCP",
+      "severity": "critical",
+      "title": "GCP storage public access prevented",
+      "legalRef": "Rule 6(1)(a)-(b)",
+      "description": "Buckets enforce public-access prevention.",
+      "checkMethod": "web",
+      "webCheckId": "gcp_storage_public",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Set publicAccessPrevention=enforced on all buckets.",
+      "appAssist": {
+        "possible": true,
+        "how": "Per-bucket verification each scan"
+      }
+    },
+    {
+      "id": "GCP-03",
+      "category": "GCP",
+      "severity": "high",
+      "title": "GCP network exposure restricted",
+      "legalRef": "Rule 6(1)(b)",
+      "description": "Firewall rules do not open non-web ports to 0.0.0.0/0.",
+      "checkMethod": "web",
+      "webCheckId": "gcp_firewall_exposure",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Restrict firewall source ranges; use IAP/bastion for admin ports.",
+      "appAssist": {
+        "possible": true,
+        "how": "Exposed-rule inventory each scan"
+      }
+    },
+    {
+      "id": "GCP-04",
+      "category": "GCP",
+      "severity": "high",
+      "title": "Cloud SQL requires SSL",
+      "legalRef": "Rule 6(1)(a)",
+      "description": "Managed database instances require encrypted connections.",
+      "checkMethod": "web",
+      "webCheckId": "gcp_sql_ssl",
+      "evidenceRequired": "Cloud/endpoint API responses captured at scan time",
+      "remediation": "Enable requireSsl on Cloud SQL instances.",
+      "appAssist": {
+        "possible": true,
+        "how": "Per-instance verification each scan"
+      }
+    }
+  ]
+}

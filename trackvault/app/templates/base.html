@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}{{ brand }}{% endblock %} — {{ brand }}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<nav class="nav">
+  <div class="wrap navbar">
+    <a class="brand" href="/">🔐 {{ brand }}</a>
+    <span class="navlinks">
+      {% if user %}
+        {% if principal.is_operator %}
+          <a href="/dashboard">Companies</a>
+          {% if user.role.value in ['admin','cs','legal'] %}<a href="/admin/rulebook">Rulebook</a>{% endif %}
+          {% if user.role.value == 'admin' %}<a href="/admin/users">Users</a><a href="/admin/audit">Audit</a>{% endif %}
+        {% else %}
+          <a href="/workspace">My assessment</a>
+        {% endif %}
+        <span class="who">{{ user.email }} · {{ user.role.value }}</span>
+        <form method="post" action="/auth/logout" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn sm ghost">Sign out</button>
+        </form>
+      {% else %}
+        <a href="/login">Sign in</a>
+      {% endif %}
+    </span>
+  </div>
+</nav>
+<main class="wrap">
+  {% if flash %}<div class="flash {% if flash_err %}err{% endif %}">{{ flash }}</div>{% endif %}
+  {% block body %}{% endblock %}
+</main>
+<footer class="foot"><div class="wrap">
+  {{ brand }} v{{ version }} · DPDPA 2023 &amp; DPDP Rules 2025 · Identifies gaps and records evidence;
+  not legal advice. Remediation runs only with the client's consent, access and permission.
+</div></footer>
+</body>
+</html>

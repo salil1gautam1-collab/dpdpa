@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block body %}
+<div style="max-width:420px;margin:30px auto">
+  <h1>Sign in</h1>
+  <p class="small">TrackVault — DPDPA compliance platform.</p>
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+  <div class="card">
+    <form method="post" action="/auth/login">
+      <label>Email</label><input type="email" name="email" required autofocus>
+      <label>Password</label><input type="password" name="password" required>
+      <p style="margin-top:16px"><button class="btn" type="submit">Sign in</button></p>
+    </form>
+  </div>
+</div>
+{% endblock %}

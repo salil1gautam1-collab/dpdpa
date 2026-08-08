@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Connectors{% endblock %}
+{% block body %}
+<p class="small"><a href="{{ back }}">← back</a></p>
+<h1>Connectors — infrastructure &amp; cloud</h1>
+<p class="small">All connectors are read-only and run only after authorisation. Credentials are
+<b>encrypted at rest</b> and never shown back or logged.</p>
+
+{% for prov, spec in specs.items() %}
+{% set idf = spec[0] %}{% set secret_fields = spec[1] %}{% set plain = spec[2] %}{% set label = spec[3] %}
+{% set v = view.get(prov) %}
+<div class="card">
+  <h3 style="margin-top:0">{{ label }} {% if v and v.connected %}<span class="badge b-COMPLIANT">Connected</span>{% endif %}</h3>
+  <form method="post" action="/companies/{{ c.id }}/connectors/{{ prov }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if prov in ['adgpo'] %}
+      <label>Collector JSON output (from your read-only AD/GPO collector)</label>
+      <textarea name="collectorJson" rows="4" placeholder='{"passwordPolicy":{...},...}'></textarea>
+    {% elif prov in ['firewall'] %}
+      <label>Firewall configuration / ruleset</label>
+      <textarea name="configText" rows="4" placeholder="paste firewall config export"></textarea>
+    {% else %}
+      <label>{{ idf }}{% if v and v.connected %} <span class="small">(current: {{ v.id_hint }})</span>{% endif %}</label>
+      <input type="text" name="{{ idf }}" autocomplete="off">
+      {% for sf in secret_fields %}
+        <label>{{ sf }} <span class="small">(encrypted; leave blank to keep existing)</span></label>
+        <input type="password" name="{{ sf }}" autocomplete="off">
+      {% endfor %}
+      {% for pf in plain %}
+        <label>{{ pf }}</label><input type="text" name="{{ pf }}" value="{{ (v.region if pf=='region' else v.tenantId) if v else '' }}">
+      {% endfor %}
+    {% endif %}
+    <label style="margin-top:12px"><input type="checkbox" name="consent" value="1" style="width:auto"> I authorise read-only posture checks using these credentials.</label>
+    <p style="margin-top:12px"><button class="btn green sm" type="submit">{{ 'Update' if v and v.connected else 'Connect &amp; save' }}</button></p>
+  </form>
+  {% if v and v.connected %}
+  <form method="post" action="/companies/{{ c.id }}/connectors/{{ prov }}/disconnect">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn red sm" type="submit">Disconnect &amp; delete credentials</button>
+  </form>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

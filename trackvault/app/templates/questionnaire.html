@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Questionnaire{% endblock %}
+{% block body %}
+<p class="small"><a href="{{ back }}">← back</a></p>
+<h1>Questionnaire — {{ c.name }}</h1>
+<p class="small">Declare the controls we can't verify from outside. A declaration can confirm an automated
+signal but never overrides a scanner-observed gap. Leave a row unanswered to keep it "to be confirmed".</p>
+<form method="post" action="/workspace/questionnaire">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="overflow">
+  <table>
+    <tr><th>Checkpoint</th><th>Status</th><th>Evidence</th><th>Department</th></tr>
+    {% set ns = namespace(last='') %}
+    {% for ctrl in controls %}
+      {% if ctrl.category != ns.last %}
+      <tr><td colspan="4" style="background:var(--navy);color:#fff;font-size:13px">{{ ctrl.category }} — {{ cats[ctrl.category] }}</td></tr>
+      {% set ns.last = ctrl.category %}
+      {% endif %}
+      {% set a = existing.get(ctrl.id) %}
+      <tr>
+        <td style="width:240px"><b>{{ ctrl.id }}</b> {{ ctrl.title }}<div class="small">{{ ctrl.legalRef }} · {{ ctrl.severity }}</div></td>
+        <td style="width:130px">
+          <select name="st-{{ ctrl.id }}">
+            <option value="">— not answered —</option>
+            {% for v in valid %}<option value="{{ v }}" {{ 'selected' if a and a.status == v }}>{{ v }}</option>{% endfor %}
+          </select>
+        </td>
+        <td><textarea name="ev-{{ ctrl.id }}" rows="2">{{ a.evidence if a else '' }}</textarea></td>
+        <td style="width:150px"><input type="text" name="dept-{{ ctrl.id }}" value="{{ a.department if a else '' }}"></td>
+      </tr>
+    {% endfor %}
+  </table>
+  </div>
+  <p style="margin-top:14px"><button class="btn green" type="submit">Save answers</button></p>
+</form>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Audit{% endblock %}
+{% block body %}
+<h1>Audit trail</h1>
+<p class="small">Append-only record of security-relevant actions. Most recent 200 shown.</p>
+<div class="overflow">
+<table>
+  <tr><th>When (UTC)</th><th>Actor</th><th>Role</th><th>Action</th><th>Target</th><th>IP</th><th>Detail</th></tr>
+  {% for e in entries %}
+  <tr>
+    <td class="tag">{{ e.at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+    <td class="small">{{ e.actor_email or '—' }}</td>
+    <td class="small">{{ e.actor_role }}</td>
+    <td><b>{{ e.action }}</b></td>
+    <td class="small">{{ e.target_type }} {{ e.target_id[:8] }}</td>
+    <td class="small">{{ e.ip }}</td>
+    <td class="small">{{ e.detail }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="small">No audit entries yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

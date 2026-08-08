@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Compare{% endblock %}
+{% block body %}
+<p class="small"><a href="{{ back }}">← history</a></p>
+<h1>Comparison — {{ c.name }}</h1>
+<div class="grid c3">
+  <div class="stat"><div class="small">Report A · {{ sa.scan_id }}</div><div class="n">{{ score_a }}%</div></div>
+  <div class="stat"><div class="small">Report B · {{ sb.scan_id }}</div><div class="n">{{ score_b }}%</div></div>
+  {% set dc = '#1a7f37' if delta > 0 else '#c62828' if delta < 0 else '#607d8b' %}
+  <div class="stat"><div class="small">Change</div><div class="n" style="color:{{ dc }}">{{ '+' if delta > 0 else '' }}{{ delta }}%</div></div>
+</div>
+
+<h2>✅ Improved ({{ improved|length }})</h2>
+{% if improved %}<div class="overflow"><table><tr><th>Control</th><th>Checkpoint</th><th>Change</th></tr>
+{% for cid,title,x,y in improved %}<tr><td><b>{{ cid }}</b></td><td>{{ title }}</td><td><span class="badge b-{{ x }}">{{ x }}</span> → <span class="badge b-{{ y }}">{{ y }}</span></td></tr>{% endfor %}
+</table></div>{% else %}<p class="small">No improvements.</p>{% endif %}
+
+<h2>⚠ Regressed ({{ regressed|length }})</h2>
+{% if regressed %}<div class="overflow"><table><tr><th>Control</th><th>Checkpoint</th><th>Change</th></tr>
+{% for cid,title,x,y in regressed %}<tr><td><b>{{ cid }}</b></td><td>{{ title }}</td><td><span class="badge b-{{ x }}">{{ x }}</span> → <span class="badge b-{{ y }}">{{ y }}</span></td></tr>{% endfor %}
+</table></div>{% else %}<p class="small">No regressions.</p>{% endif %}
+
+<h2>🆕 New checkpoints ({{ newc|length }})</h2>
+{% if newc %}<p class="small">Appeared in report B, typically from a rulebook update.</p>
+<div class="overflow"><table><tr><th>Control</th><th>Checkpoint</th><th>Status</th></tr>
+{% for r in newc %}<tr><td><b>{{ r.controlId }}</b></td><td>{{ r.title }}</td><td><span class="badge b-{{ r.status }}">{{ r.status }}</span></td></tr>{% endfor %}
+</table></div>{% else %}<p class="small">None.</p>{% endif %}
+{% endblock %}
