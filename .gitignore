@@ -1,0 +1,24 @@
+# ============================================================
+# CLIENT DATA MUST NEVER BE COMMITTED.
+# Everything under local/ is client-specific input, evidence
+# and generated reports. It stays on the machine that ran the
+# scan. See docs/DATA-PROTECTION-POLICY.md.
+# ============================================================
+local/
+*.client.json
+*.evidence.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+build/
+dist/
+*.spec
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

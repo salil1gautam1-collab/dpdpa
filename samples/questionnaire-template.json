@@ -1,0 +1,37 @@
+{
+  "_readme": [
+    "Copy this file to local/<client-slug>/questionnaire.json and fill it in.",
+    "assertions[] carry direct control-status declarations — the minimal manual input.",
+    "Valid status values: COMPLIANT | PARTIAL | GAP | NA | TBC.",
+    "List control ids with: python -m dpdpa controls",
+    "departments[] optionally carries the Parts A-M data-flow questionnaire blocks",
+    "(A Process, B Data collected, C Source, D Method, E Purpose, F Consent & notice,",
+    " G Systems & storage, H Internal access, I Sharing, J International, K Retention,",
+    " L Security, M Breach preparedness)."
+  ],
+  "assertions": [
+    {
+      "controlId": "SEC-01",
+      "status": "GAP",
+      "evidence": "Security measures and industry-standard adherence marked Not Compliant in departmental review.",
+      "source": {"department": "IT", "respondent": "compliance coordinator", "date": "2026-08-01"}
+    },
+    {
+      "controlId": "CH-01",
+      "status": "NA",
+      "evidence": "Platform is strictly B2B with corporate onboarding only; documented age-exposure assessment attached.",
+      "source": {"department": "Legal", "respondent": "company secretary", "date": "2026-08-01"}
+    }
+  ],
+  "departments": [
+    {
+      "name": "Marketing",
+      "parts": {
+        "A": {"process": "Social media ads", "owner": ""},
+        "B": {"dataCollected": ["name", "email", "mobile"]},
+        "F": {"consentMechanism": "", "noticeShown": false},
+        "K": {"retention": "", "deletionTrigger": ""}
+      }
+    }
+  ]
+}
