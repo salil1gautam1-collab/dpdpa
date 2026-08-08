@@ -42,8 +42,8 @@ def main(argv=None):
     p.add_argument("--port", type=int, default=8377)
     p.add_argument("--host", default="127.0.0.1", help="0.0.0.0 inside Docker")
 
-    p = sub.add_parser("demo", help="seed curated demo companies with logins")
-    p.add_argument("--reset", action="store_true", help="delete existing *-demo/*-dummy companies first")
+    p = sub.add_parser("sample", help="seed curated sample companies with logins")
+    p.add_argument("--reset", action="store_true", help="delete existing sample companies first")
 
     p = sub.add_parser("controls", help="list rulebook checkpoints")
     p.add_argument("--category", default=None)
@@ -83,7 +83,7 @@ def main(argv=None):
         from .server import serve
         serve(None, args.port, args.host)
 
-    elif args.cmd == "demo":
+    elif args.cmd == "sample":
         import shutil
         from .workspace import save_json, slugify, LOCAL_ROOT
         from .report import generate
@@ -91,11 +91,11 @@ def main(argv=None):
 
         if args.reset and LOCAL_ROOT.exists():
             for d in LOCAL_ROOT.iterdir():
-                if d.is_dir() and (d.name.endswith("-demo") or d.name.endswith("-dummy")):
+                if d.is_dir() and d.name.endswith(("-sample", "-demo", "-dummy")):
                     shutil.rmtree(d, ignore_errors=True)
                     print("removed", d.name)
 
-        DEMO_PW = "demo-client-2026"
+        SAMPLE_PW = "sample-client-2026"
         # (name, login-email, [questionnaire rows], connectors dict or None)
         ad_json = ('{"passwordPolicy":{"minLength":8,"complexity":true,"lockoutThreshold":0},'
                    '"totalUsers":180,"privilegedGroups":{"Domain Admins":9,"Enterprise Admins":2},'
@@ -103,17 +103,17 @@ def main(argv=None):
         fw_cfg = ("access-list OUTSIDE permit ip any any\n"
                   "access-list MGMT permit tcp any any eq 22\n"
                   "access-list WEB permit tcp any host 10.0.0.5 eq 443\n")
-        demos = [
-            ("Northwind Retail (demo)", "it@northwind.demo", [
+        samples = [
+            ("Northwind Retail (sample)", "it@northwind.example", [
                 ("NT-01", "GAP", "No privacy notice on the e-commerce storefront."),
                 ("CN-02", "GAP", "Checkout and newsletter forms have no consent control."),
                 ("SEC-01", "PARTIAL", "Firewall and AV in place; no documented safeguards policy."),
                 ("RET-01", "GAP", "Order data kept indefinitely; no retention schedule."),
                 ("DR-01", "GAP", "No published data-principal request channel."),
                 ("BR-01", "GAP", "No incident-response plan."),
-             ], {"adgpo": {"collectorJson": ad_json, "consent": {"granted": True, "grantedBy": "Demo IT", "date": "2026-08-09"}},
-                 "firewall": {"configText": fw_cfg, "consent": {"granted": True, "grantedBy": "Demo IT", "date": "2026-08-09"}}}),
-            ("Acme Exports Pvt Ltd (demo)", "compliance@acme.demo", [
+             ], {"adgpo": {"collectorJson": ad_json, "consent": {"granted": True, "grantedBy": "Sample IT", "date": "2026-08-09"}},
+                 "firewall": {"configText": fw_cfg, "consent": {"granted": True, "grantedBy": "Sample IT", "date": "2026-08-09"}}}),
+            ("Acme Exports Pvt Ltd (sample)", "compliance@acme.example", [
                 ("NT-01", "COMPLIANT", "Privacy notice published and linked site-wide (counsel-reviewed)."),
                 ("CN-02", "PARTIAL", "Consent checkbox on contact form; missing on newsletter."),
                 ("SEC-04", "GAP", "Web-server logs rotate after 30 days — Rule 6 needs one year."),
@@ -123,21 +123,21 @@ def main(argv=None):
                 ("CH-01", "NA", "Strictly B2B; corporate onboarding only."),
              ], None),
         ]
-        for name, email, rows, conns in demos:
+        for name, email, rows, conns in samples:
             slug = init_client(name, [])
             cfg = load_client(slug)
-            cfg["contact"] = "Demo Client"
-            set_company_auth(cfg, email, DEMO_PW)
+            cfg["contact"] = "Sample Client"
+            set_company_auth(cfg, email, SAMPLE_PW)
             save_json(client_dir(slug) / "client.json", cfg)
             save_json(client_dir(slug) / "questionnaire.json", {"assertions": [
                 {"controlId": cid, "status": st, "evidence": ev,
-                 "source": {"department": "Demo", "respondent": "seed data", "date": "2026-08-09"}}
+                 "source": {"department": "Sample", "respondent": "seed data", "date": "2026-08-09"}}
                 for cid, st, ev in rows]})
             if conns:
                 save_json(client_dir(slug) / "connectors.json", conns)
             snap = run_scan(slug, skip_web=True)
             generate(slug, snap)
-            print(f"seeded {name} -> login {email} / {DEMO_PW}")
+            print(f"seeded {name} -> login {email} / {SAMPLE_PW}")
         print("Admin: http://127.0.0.1:8377/admin  (password: dpdpa-admin)")
 
     elif args.cmd == "retention":

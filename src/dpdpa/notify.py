@@ -8,7 +8,7 @@ Email is sent via SMTP only when configured through environment variables:
   TRACKVAULT_SMTP_HOST, TRACKVAULT_SMTP_PORT, TRACKVAULT_SMTP_USER,
   TRACKVAULT_SMTP_PASS, TRACKVAULT_SMTP_FROM, TRACKVAULT_BASE_URL
 If SMTP is not configured, emails are recorded with status "simulated" (nothing
-leaves the machine) — honest for demos and safe by default.
+leaves the machine) — safe by default for previews and testing.
 """
 from __future__ import annotations
 

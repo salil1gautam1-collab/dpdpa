@@ -1,23 +1,23 @@
-# DPDPA Sentinel — Demo Run-book
+# DPDPA Sentinel — Walkthrough
 
 A 10–15 minute walkthrough that tells the product story end to end. Two roles:
 the **client** (submits inputs, reads the report) and the **operator/admin**
 (runs the assessment). Show both.
 
-## 0. Before the demo (once)
+## 0. Before the walkthrough (once)
 
 ```bash
 docker compose up -d --build          # start the app
-docker compose exec dpdpa python -m dpdpa demo --reset   # clean, seeded demo data
+docker compose exec dpdpa python -m dpdpa sample --reset   # clean, seeded sample data
 ```
 
-`demo --reset` removes any leftover `*-demo` / `*-dummy` companies and seeds a
+`sample --reset` removes any leftover sample companies and seeds a
 clean set with logins printed to the console:
 
 | Company | Client login | Password |
 |---|---|---|
-| Northwind Retail (demo) | it@northwind.demo | demo-client-2026 |
-| Acme Exports Pvt Ltd (demo) | compliance@acme.demo | demo-client-2026 |
+| Northwind Retail (sample) | it@northwind.example | sample-client-2026 |
+| Acme Exports Pvt Ltd (sample) | compliance@acme.example | sample-client-2026 |
 
 Admin: **http://127.0.0.1:8377/admin** — password `dpdpa-admin`.
 
@@ -39,7 +39,7 @@ Open **http://127.0.0.1:8377/**. Walk the top of the landing page:
 
 ## 2. The client experience — 3 min
 
-Click **Company sign-in**, log in as **it@northwind.demo / demo-client-2026**.
+Click **Company sign-in**, log in as **it@northwind.example / sample-client-2026**.
 Show that the client sees a calm, guided workspace:
 - **Three input tiles**: questionnaire, infrastructure/cloud access (with
   consent), consent. No run buttons, no operational controls.
@@ -88,10 +88,10 @@ backed finding produced automatically.
 - Disclaimer: we identify gaps and provide evidence; remediation runs only with
   the client's consent, access and permission.
 
-## Reset between demos
+## Reset between walkthroughs
 
 ```bash
-docker compose exec dpdpa python -m dpdpa demo --reset
+docker compose exec dpdpa python -m dpdpa sample --reset
 ```
 
 ## Talking points / FAQ
