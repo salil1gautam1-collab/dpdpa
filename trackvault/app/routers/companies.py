@@ -155,48 +155,57 @@ async def op_save_questionnaire(cid: str, request: Request, db: Session = Depend
 
 @router.post("/companies/{cid}/import")
 async def import_customer_data(cid: str, request: Request, db: Session = Depends(get_db)):
-    """Bulk-import collated customer data (TradeIndia-style) and optionally sites."""
+    """Import collated customer data from pasted text or an uploaded file
+    (CSV / Excel / Word / PDF / JSON). Fuzzy-parses simple formats."""
     p = require(request, db, roles={Role.admin, Role.analyst, Role.cs})
     c = _company_or_404(db, p.user.organization_id, cid)
     form = await request.form()
     check_csrf(p, form.get("csrf", ""))
-    import json
-    raw = (form.get("payload", "") or "").strip()
-    try:
-        data = json.loads(raw) if raw else {}
-        assertions = data.get("assertions", data) if isinstance(data, (dict, list)) else []
-        if isinstance(data, dict) and isinstance(data.get("sites"), list):
-            c.sites = [str(s).strip() for s in data["sites"] if str(s).strip()]
-        if not isinstance(assertions, list):
-            raise ValueError("expected an array of answers, or an object with an 'assertions' array")
-        existing = {a.control_id: a for a in db.execute(select(QuestionnaireAnswer).where(
-            QuestionnaireAnswer.company_id == cid)).scalars()}
-        valid_ids = {ctrl["id"] for ctrl in latest_rulebook(db)["controls"]}
-        imported, skipped = 0, 0
-        for a in assertions:
-            cidx = a.get("controlId")
-            st = str(a.get("status", "")).upper()
-            if cidx not in valid_ids or st not in {"COMPLIANT", "PARTIAL", "GAP", "NA", "TBC"}:
-                skipped += 1
-                continue
-            dept = (a.get("source", {}) or {}).get("department", "") if isinstance(a.get("source"), dict) else ""
-            ev = str(a.get("evidence", ""))
-            if cidx in existing:
-                existing[cidx].status = st
-                existing[cidx].evidence = ev
-                existing[cidx].department = dept
-            else:
-                db.add(QuestionnaireAnswer(company_id=cid, control_id=cidx, status=st,
-                                           evidence=ev, department=dept))
-            imported += 1
-        db.commit()
-        record(db, action="customer.data.import", actor=p.user, target_type="company", target_id=cid,
-               ip=getattr(request.state, "client_ip", ""), imported=imported, skipped=skipped)
+    from ..services import import_parser as ip
+
+    lookup = ip.build_id_lookup([ctrl["id"] for ctrl in latest_rulebook(db)["controls"]])
+    answers: list[dict] = []
+    source_desc = []
+
+    pasted = (form.get("payload", "") or "").strip()
+    if pasted:
+        answers += ip.parse_text(pasted, lookup)
+        source_desc.append("pasted text")
+
+    upload = form.get("file")
+    fname = getattr(upload, "filename", "") or ""
+    if upload is not None and fname:
+        data = await upload.read()
+        if len(data) > 15 * 1024 * 1024:
+            return redirect(f"/companies/{cid}", "File too large (max 15 MB).", err=True)
+        answers += ip.parse_upload(fname, data, lookup)
+        source_desc.append(fname)
+
+    # de-duplicate: last write wins per control id
+    merged = {}
+    for a in answers:
+        merged[a["controlId"]] = a
+    if not merged:
         return redirect(f"/companies/{cid}",
-                        f"Imported {imported} answer(s){', updated sites' if isinstance(data, dict) and data.get('sites') else ''}. "
-                        f"{skipped} skipped. Run the assessment to produce the report.")
-    except (json.JSONDecodeError, ValueError) as ex:
-        return redirect(f"/companies/{cid}", f"Import failed: {ex}", err=True)
+                        "Couldn't find any recognisable answers. Provide rows like 'SEC-01, gap, evidence' "
+                        "or upload a CSV/Excel/Word/PDF with a control column and a status column.", err=True)
+
+    existing = {a.control_id: a for a in db.execute(select(QuestionnaireAnswer).where(
+        QuestionnaireAnswer.company_id == cid)).scalars()}
+    for cidx, a in merged.items():
+        if cidx in existing:
+            existing[cidx].status = a["status"]
+            existing[cidx].evidence = a.get("evidence", "")
+            existing[cidx].department = a.get("department", "")
+        else:
+            db.add(QuestionnaireAnswer(company_id=cid, control_id=cidx, status=a["status"],
+                                       evidence=a.get("evidence", ""), department=a.get("department", "")))
+    db.commit()
+    record(db, action="customer.data.import", actor=p.user, target_type="company", target_id=cid,
+           ip=getattr(request.state, "client_ip", ""), imported=len(merged), sources=source_desc)
+    return redirect(f"/companies/{cid}",
+                    f"Imported {len(merged)} answer(s) from {', '.join(source_desc)}. "
+                    "Review in the questionnaire, then run the assessment.")
 
 
 @router.post("/companies/{cid}/client-login")
