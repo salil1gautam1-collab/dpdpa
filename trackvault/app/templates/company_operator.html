@@ -47,10 +47,17 @@
   <a class="btn gray" href="/companies/{{ c.id }}/history">History &amp; compare</a>
 </div>
 
-<h2>Import customer data</h2>
+<h2>Send &amp; import the questionnaire</h2>
+<div class="card" style="border-color:#0d6efd">
+  <h3 style="margin-top:0">📤 Step 1 — send the customer a template</h3>
+  <p class="small">Download a ready-made Excel questionnaire for <b>{{ c.name }}</b> — sectioned by area
+    (website, cloud, endpoints, security…), each row explained, with a status drop-down including
+    <b>N/A</b>, plus the consent statement. Email it to the customer to fill in.</p>
+  <a class="btn" href="/companies/{{ c.id }}/questionnaire-template.xlsx">⬇ Download Excel template</a>
+</div>
 <div class="card">
-  <p class="small">Already collected the customer's answers (like the TradeIndia data sheet)? Load the whole
-    assessment at once, then run it — <b>upload their file</b> or <b>paste simple rows</b>. No coding needed.</p>
+  <h3 style="margin-top:0">📥 Step 2 — import their completed file</h3>
+  <p class="small">Upload the filled template (or any client data sheet), or paste simple rows. No coding needed.</p>
   <form method="post" action="/companies/{{ c.id }}/import" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ csrf }}">
 

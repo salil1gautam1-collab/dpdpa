@@ -153,6 +153,20 @@ async def op_save_questionnaire(cid: str, request: Request, db: Session = Depend
     return redirect(f"/companies/{cid}", "Questionnaire saved.")
 
 
+@router.get("/companies/{cid}/questionnaire-template.xlsx")
+def download_template(cid: str, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import Response
+    from ..config import get_settings
+    from ..services.template_service import build_template
+    p = require(request, db, operator=True)
+    c = _company_or_404(db, p.user.organization_id, cid)
+    data = build_template(latest_rulebook(db), get_settings().brand, company_name=c.name)
+    fname = f"DPDPA-Questionnaire-{c.slug}.xlsx"
+    return Response(content=data,
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
 @router.post("/companies/{cid}/import")
 async def import_customer_data(cid: str, request: Request, db: Session = Depends(get_db)):
     """Import collated customer data from pasted text or an uploaded file

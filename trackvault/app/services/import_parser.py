@@ -30,11 +30,13 @@ _STATUS_WORDS = {
 }
 
 _HEADER_HINTS = {
-    "id": {"controlid", "control", "id", "checkpoint", "ref", "control id", "control ref"},
-    "status": {"status", "state", "result", "compliance", "answer", "position"},
+    "id": {"controlid", "control", "id", "checkpoint", "ref", "control id", "control ref",
+           "checkpoint id"},
+    "status": {"status", "state", "result", "compliance", "answer", "position", "your status"},
     "evidence": {"evidence", "remark", "remarks", "note", "notes", "comment", "comments",
-                 "finding", "details", "detail", "current position"},
-    "department": {"department", "dept", "owner", "team", "function"},
+                 "finding", "details", "detail", "current position", "evidence / notes", "evidence/notes"},
+    "department": {"department", "dept", "owner", "team", "function", "department / owner",
+                   "department/owner"},
 }
 
 
@@ -67,22 +69,24 @@ def match_control_id(token: str, lookup: dict) -> str | None:
 
 
 def _rows_to_answers(rows: list[list[str]], lookup: dict) -> list[dict]:
-    """Given rows of cells, detect a header and map columns; else positional."""
+    """Detect a header row anywhere in the first rows (handles title rows and
+    multi-sheet concatenation); else fall back to positional columns."""
     if not rows:
         return []
-    # Header detection
     col = {"id": 0, "status": 1, "evidence": 2, "department": 3}
-    header_used = False
-    first = [str(c or "").strip().lower() for c in rows[0]]
-    hits = {k: None for k in col}
-    for idx, cell in enumerate(first):
-        for key, hints in _HEADER_HINTS.items():
-            if cell in hints and hits[key] is None:
-                hits[key] = idx
-    if hits["id"] is not None and hits["status"] is not None:
-        col = {k: (v if v is not None else -1) for k, v in hits.items()}
-        header_used = True
-    body = rows[1:] if header_used else rows
+    header_idx = None
+    for i, r in enumerate(rows[:60]):
+        cells = [str(c or "").strip().lower() for c in r]
+        hits = {k: None for k in col}
+        for idx, cell in enumerate(cells):
+            for key, hints in _HEADER_HINTS.items():
+                if cell in hints and hits[key] is None:
+                    hits[key] = idx
+        if hits["id"] is not None and hits["status"] is not None:
+            col = {k: (v if v is not None else -1) for k, v in hits.items()}
+            header_idx = i
+            break
+    body = rows[header_idx + 1:] if header_idx is not None else rows
 
     out = []
     for r in body:

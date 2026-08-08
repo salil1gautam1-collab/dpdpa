@@ -185,6 +185,19 @@ async def rulebook_import(request: Request, db: Session = Depends(get_db)):
         return redirect("/admin/rulebook", f"Import failed: {ex}", err=True)
 
 
+# ---- Blank questionnaire template ----
+@router.get("/admin/questionnaire-template.xlsx")
+def blank_template(request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import Response
+    from ..config import get_settings
+    from ..services.template_service import build_template
+    require(request, db, operator=True)
+    data = build_template(latest_rulebook(db), get_settings().brand)
+    return Response(content=data,
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="DPDPA-Questionnaire-Template.xlsx"'})
+
+
 # ---- Audit (admin) ----
 @router.get("/admin/audit")
 def audit_page(request: Request, db: Session = Depends(get_db)):
