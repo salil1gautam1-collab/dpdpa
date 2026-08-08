@@ -33,8 +33,12 @@ a previously-compliant point regresses or a new gap appears.
 docker compose up -d
 ```
 
-Open http://127.0.0.1:8377/ — add companies, record scan consent, fill the
-questionnaire in the browser, press **Run scan**, open the Phase 1/2 reports.
+Open http://127.0.0.1:8377/ — a public landing page explains the product; the
+**Start assessment** flow onboards a company (details + scan consent), then its
+workspace offers the questionnaire, the **Run assessment** button, reports and
+alerts. The **Admin** link (footer/nav) opens the operations dashboard across
+all engagements — default password `dpdpa-admin`, change it via the
+`DPDPA_ADMIN_PASSWORD` environment variable (set it in `docker-compose.yml`).
 Client data persists in `./local` on the host (volume mount), never in the image.
 
 **Without Docker** (Python 3.10+, no third-party packages):

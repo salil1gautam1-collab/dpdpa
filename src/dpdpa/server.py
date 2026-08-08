@@ -1,16 +1,20 @@
 """DPDPA Sentinel web application (stdlib only — no framework).
 
-Multi-client UI: add companies, record scan consent, fill the questionnaire in
-the browser, run scans with a button, generate and view reports, see alerts.
+Public flow:  / (landing) -> /start (onboarding + consent) -> /company/<slug>
+              (workspace: scan button, questionnaire, reports, alerts)
+Admin flow:   /admin (login) -> operations dashboard across all companies.
 
-Prototype has no authentication: bind 127.0.0.1 locally. In Docker the
-container binds 0.0.0.0 internally and you publish the port to localhost.
-Production (.NET port) replaces this with an authenticated multi-tenant app.
+Prototype auth is a single admin password (env DPDPA_ADMIN_PASSWORD, default
+"dpdpa-admin") with in-memory sessions — replace with real identity in the
+production port. Bind 127.0.0.1 locally; in Docker the container binds 0.0.0.0
+internally and compose publishes the port to localhost only.
 """
 from __future__ import annotations
 
-import html
+import hmac
 import json
+import os
+import secrets
 import threading
 import traceback
 from datetime import date
@@ -21,61 +25,15 @@ from . import PRODUCT_NAME, __version__
 from .engine import run_scan, summarize
 from .rulebook import load_rulebook
 from .scanners.questionnaire import VALID
+from .webui import badge, e, landing, layout, start_form, admin_login, STATUS_COLORS
 from .workspace import (LOCAL_ROOT, client_dir, init_client, list_snapshots,
                         load_client, load_json, save_json)
 
-_jobs: dict = {}          # slug -> {"state": running|done|error, "detail": str}
+_jobs: dict = {}
 _jobs_lock = threading.Lock()
+_sessions: set = set()
 
-_CSS = """
-body{font-family:Segoe UI,system-ui,sans-serif;margin:0;background:#f6f7f9;color:#1c2733}
-.wrap{max-width:1100px;margin:0 auto;padding:20px}
-header{background:#0d2137;color:#fff}
-header .wrap{display:flex;justify-content:space-between;align-items:center;padding-top:14px;padding-bottom:14px}
-header a{color:#fff;text-decoration:none}
-h1{font-size:20px;margin:0} h2{margin:26px 0 10px;font-size:18px;border-bottom:2px solid #dde3ea;padding-bottom:6px}
-table{border-collapse:collapse;width:100%;background:#fff;font-size:14px}
-th,td{border:1px solid #dde3ea;padding:8px 10px;text-align:left;vertical-align:top}
-th{background:#eef2f6}
-.btn{display:inline-block;background:#0d6efd;color:#fff;border:none;border-radius:6px;
-padding:8px 16px;font-size:14px;cursor:pointer;text-decoration:none;margin:2px}
-.btn.green{background:#1a7f37}.btn.gray{background:#607d8b}.btn.red{background:#c62828}
-.btn:disabled{background:#9db2c5}
-input[type=text],input[type=url],textarea,select{width:100%;box-sizing:border-box;padding:7px;
-border:1px solid #b9c6d2;border-radius:5px;font-size:13px;font-family:inherit}
-.badge{display:inline-block;padding:2px 10px;border-radius:12px;color:#fff;font-size:12px;font-weight:600}
-.msg{background:#e7f1ff;border:1px solid #9ec5fe;border-radius:6px;padding:10px 14px;margin:12px 0}
-.err{background:#fdecea;border-color:#f5c6cb}
-.card{background:#fff;border:1px solid #dde3ea;border-radius:8px;padding:16px 20px;margin:10px 0}
-.cards{display:flex;gap:12px;flex-wrap:wrap}
-.cards .stat{background:#fff;border:1px solid #dde3ea;border-radius:8px;padding:10px 18px;text-align:center;min-width:90px}
-.stat .n{font-size:26px;font-weight:700}
-.small{font-size:12px;color:#607d8b}
-.cat{background:#0d2137;color:#fff;padding:6px 10px;font-size:13px}
-.spin{display:inline-block;width:14px;height:14px;border:3px solid #cfe0f4;border-top-color:#0d6efd;
-border-radius:50%;animation:s 1s linear infinite;vertical-align:middle}
-@keyframes s{to{transform:rotate(360deg)}}
-"""
-
-_STATUS_COLORS = {"COMPLIANT": "#1a7f37", "PARTIAL": "#b58900", "GAP": "#c62828",
-                  "NA": "#607d8b", "TBC": "#5c6bc0"}
-
-
-def _e(s) -> str:
-    return html.escape(str(s if s is not None else ""))
-
-
-def _badge(status: str) -> str:
-    return f'<span class="badge" style="background:{_STATUS_COLORS.get(status, "#607d8b")}">{_e(status)}</span>'
-
-
-def _page(title: str, body: str, refresh: int | None = None) -> bytes:
-    meta = f'<meta http-equiv="refresh" content="{refresh}">' if refresh else ""
-    return f"""<!doctype html><html><head><meta charset="utf-8">{meta}
-<title>{_e(title)} — {PRODUCT_NAME}</title><style>{_CSS}</style></head><body>
-<header><div class="wrap"><h1><a href="/">🛡 {PRODUCT_NAME}</a></h1>
-<span class="small" style="color:#9fb3c8">v{__version__} · DPDPA 2023 + DPDP Rules 2025 · rulebook v{load_rulebook()['rulebookVersion']}</span></div></header>
-<div class="wrap">{body}</div></body></html>""".encode("utf-8")
+SCORE_COLORS = [(80, "var(--ok)"), (50, "var(--warn)"), (0, "var(--bad)")]
 
 
 def _clients() -> list[dict]:
@@ -114,7 +72,7 @@ def _start_scan(slug: str, skip_web: bool) -> None:
             s = summarize(snap)
             with _jobs_lock:
                 _jobs[slug] = {"state": "done",
-                               "detail": f"scan {snap['scanId']} complete — score {s['complianceScore']}%"}
+                               "detail": f"Scan complete — compliance score {s['complianceScore']}%"}
         except Exception as ex:
             with _jobs_lock:
                 _jobs[slug] = {"state": "error", "detail": f"{type(ex).__name__}: {ex}"}
@@ -123,104 +81,113 @@ def _start_scan(slug: str, skip_web: bool) -> None:
     threading.Thread(target=work, daemon=True).start()
 
 
-# ---------------------------------------------------------------- pages ----
-
-def page_dashboard(msg: str = "") -> bytes:
-    rows = []
-    for cfg in _clients():
-        slug = cfg["slug"]
-        snap = _latest_snapshot(slug)
-        job = _job_state(slug)
-        if job and job["state"] == "running":
-            status = '<span class="spin"></span> scanning…'
-        elif snap:
-            s = summarize(snap)
-            status = (f"<b>{s['complianceScore']}%</b> &nbsp; "
-                      f"{_badge('GAP')} {s['counts']['GAP']} · {_badge('TBC')} {s['counts']['TBC']} "
-                      f"<span class='small'>({snap['scanId']})</span>")
-        else:
-            status = '<span class="small">never scanned</span>'
-        consent = "✅" if cfg.get("scanConsent", {}).get("granted") else "—"
-        rows.append(f"""<tr><td><a href="/client/{slug}"><b>{_e(cfg['name'])}</b></a></td>
-<td class="small">{_e(', '.join(cfg.get('sites', [])) or '(questionnaire only)')}</td>
-<td style="text-align:center">{consent}</td><td>{status}</td>
-<td><a class="btn" href="/client/{slug}">Open</a></td></tr>""")
-    body = f"""
-{f'<div class="msg">{_e(unquote(msg))}</div>' if msg else ''}
-<h2>Companies</h2>
-<table><tr><th>Company</th><th>Sites</th><th>Scan consent</th><th>Latest result</th><th></th></tr>
-{''.join(rows) or '<tr><td colspan="5">No companies yet — add one below.</td></tr>'}</table>
-<h2>Add a company</h2>
-<div class="card"><form method="post" action="/clients">
-<table style="border:none"><tr>
-<td style="border:none;width:34%"><label>Company name<br><input type="text" name="name" required placeholder="Acme Exports Pvt Ltd"></label></td>
-<td style="border:none"><label>Websites (comma-separated, optional)<br>
-<input type="text" name="sites" placeholder="https://www.acme.example, https://catalog.acme.example"></label></td>
-<td style="border:none;width:120px;vertical-align:bottom"><button class="btn green" type="submit">Add company</button></td>
-</tr></table>
-<div class="small">Scanning starts only after you record the company's written consent on its page.</div>
-</form></div>"""
-    return _page("Companies", body)
+def _score_color(score: float) -> str:
+    for threshold, color in SCORE_COLORS:
+        if score >= threshold:
+            return color
+    return "var(--bad)"
 
 
-def page_client(slug: str, msg: str = "", is_err: bool = False) -> bytes:
+# ----------------------------------------------------------------- pages ---
+
+def page_company(slug: str, msg: str = "", is_err: bool = False) -> bytes:
     cfg = load_client(slug)
     snap = _latest_snapshot(slug)
     job = _job_state(slug)
     running = bool(job and job["state"] == "running")
     consent = cfg.get("scanConsent", {})
+    has_sites = bool(cfg.get("sites"))
+    q = load_json(client_dir(slug) / "questionnaire.json", {})
+    n_answered = len(q.get("assertions", []))
     alerts = load_json(client_dir(slug) / "alerts.json", {})
 
-    if running:
-        scan_zone = '<p><span class="spin"></span> <b>Scan in progress…</b> this page refreshes automatically.</p>'
-    else:
-        job_note = (f'<div class="msg {"err" if job["state"] == "error" else ""}">{_e(job["detail"])}</div>'
-                    if job else "")
-        scan_zone = f"""{job_note}
-<form method="post" action="/client/{slug}/scan" style="display:inline">
-<button class="btn" {'title="record consent first" disabled' if not consent.get('granted') else ''}
-type="submit">▶ Run full scan (web + questionnaire)</button></form>
-<form method="post" action="/client/{slug}/scan?skipweb=1" style="display:inline">
-<button class="btn gray" type="submit">Run questionnaire-only scan</button></form>
-<a class="btn gray" href="/client/{slug}/questionnaire">✎ Fill questionnaire</a>"""
+    # progress steps
+    def step(label, state):
+        return f'<span class="{state}">{label}</span>'
+    steps = [step("① Company details ✓", "done"),
+             step("② Scan consent " + ("✓" if consent.get("granted") else "— pending"),
+                  "done" if consent.get("granted") else ("now" if has_sites else "")),
+             step(f"③ Questionnaire — {n_answered}/57 answered",
+                  "done" if n_answered >= 40 else ("now" if n_answered else "")),
+             step("④ Scan " + ("✓" if snap else "— not yet run"), "done" if snap else "now"),
+             step("⑤ Reports " + ("✓" if snap else ""), "done" if snap else "")]
 
     if snap:
         s = summarize(snap)
-        stats = "".join(
-            f'<div class="stat"><div class="n" style="color:{_STATUS_COLORS[k]}">{v}</div><div class="small">{k}</div></div>'
+        score = s["complianceScore"]
+        chips = "".join(
+            f'<span class="chip"><b style="color:{STATUS_COLORS[k]}">{v}</b>{k.title() if k != "NA" else "N/A"}</span>'
             for k, v in s["counts"].items())
+        head_right = f"""
+<div class="donut" style="--p:{score};--dc:{_score_color(score)}"><div>{score}%<small>compliance</small></div></div>"""
         results = f"""
-<div class="cards"><div class="stat"><div class="n">{s['complianceScore']}%</div><div class="small">score</div></div>{stats}</div>
-<p><a class="btn green" href="/client/{slug}/report/phase1-discovery.html">📄 Phase 1 — Discovery</a>
-<a class="btn green" href="/client/{slug}/report/phase2-gap-assessment.html">📄 Phase 2 — Gap Assessment</a>
-<a class="btn gray" href="/client/{slug}/report/summary.json">summary.json</a></p>
-<p class="small">Scans on file: {len(list_snapshots(slug))} · latest {snap['scanId']} · rulebook v{snap['rulebookVersion']}</p>"""
+<div class="grid c3" style="margin-top:6px">
+<div class="tile"><div class="ico">📄</div><h3>Phase 1 — Discovery</h3>
+<p>Your data footprint: pages, cookies, trackers, forms, questionnaire coverage.</p>
+<p style="margin-top:12px"><a class="btn sm" href="/company/{slug}/report/phase1-discovery.html">Open report</a></p></div>
+<div class="tile"><div class="ico">📊</div><h3>Phase 2 — Gap Assessment</h3>
+<p>All 57 checkpoints graded with severity, evidence and recommendations.</p>
+<p style="margin-top:12px"><a class="btn sm" href="/company/{slug}/report/phase2-gap-assessment.html">Open report</a></p></div>
+<div class="tile"><div class="ico">🧾</div><h3>Machine-readable</h3>
+<p>Summary JSON for your GRC tooling or board pack automation.</p>
+<p style="margin-top:12px"><a class="btn sm gray" href="/company/{slug}/report/summary.json">summary.json</a></p></div>
+</div>
+<p class="small">Scans on file: {len(list_snapshots(slug))} · latest {e(snap['scanId'])} · rulebook v{e(snap['rulebookVersion'])}</p>"""
     else:
-        results = "<p class='small'>No scans yet.</p>"
+        head_right = '<div class="donut" style="--p:0;--dc:var(--na)"><div>—<small>no scan yet</small></div></div>'
+        chips = ""
+        results = "<p class='small'>Run your first scan to generate reports.</p>"
+
+    if running:
+        scan_zone = ('<div class="card"><span class="spin"></span> <b>Scan in progress…</b> '
+                     'checking your sites and evaluating all 57 checkpoints. This page refreshes automatically.</div>')
+    else:
+        job_note = (f'<div class="msg {"err" if job["state"] == "error" else ""}">{e(job["detail"])}</div>'
+                    if job else "")
+        buttons = []
+        if has_sites:
+            buttons.append(
+                f'<form method="post" action="/company/{slug}/scan" style="display:inline">'
+                f'<button class="btn green" type="submit" '
+                + ("" if consent.get("granted") else 'disabled title="record scan consent first"')
+                + ">▶ Run full assessment</button></form>")
+        buttons.append(
+            f'<form method="post" action="/company/{slug}/scan?skipweb=1" style="display:inline">'
+            f'<button class="btn gray" type="submit">Run questionnaire-only assessment</button></form>')
+        buttons.append(f'<a class="btn" href="/company/{slug}/questionnaire">✎ Fill questionnaire ({n_answered}/57)</a>')
+        scan_zone = job_note + "<p>" + " ".join(buttons) + "</p>"
+
+    consent_zone = "" if consent.get("granted") or not has_sites else f"""
+<div class="card" style="border-color:#e6d9a8;background:#fff8e6">
+<h3 style="margin-top:0">Authorise the website scan</h3>
+<p style="font-size:14px">Web scanning is disabled until your organisation authorises it. Scans are passive,
+read-only visits to your public pages — no credentials, no form submissions, no intrusion.</p>
+<form method="post" action="/company/{slug}/consent">
+<input type="text" name="grantedBy" required placeholder="Name, designation and basis (e.g. approved by R. Sharma, CTO, email dated …)" style="max-width:560px">
+<p><button class="btn" type="submit">Record authorisation</button></p></form></div>"""
 
     alert_rows = "".join(
-        f"<tr><td><b>{_e(a['type'])}</b></td><td>{_e(a.get('controlId', ''))}</td><td>{_e(a.get('detail', ''))}</td></tr>"
+        f"<tr><td><b>{e(a['type'])}</b></td><td>{e(a.get('controlId', ''))}</td><td>{e(a.get('detail', ''))}</td></tr>"
         for a in alerts.get("alerts", []))
-    consent_zone = (
-        f"<p>✅ Consent recorded — <span class='small'>{_e(consent.get('grantedBy', ''))} ({_e(consent.get('date', ''))})</span></p>"
-        if consent.get("granted") else f"""
-<form method="post" action="/client/{slug}/consent">
-<p>⚠ No scan consent recorded. Web scanning is blocked until the company authorises it in writing.</p>
-<input type="text" name="grantedBy" required placeholder="Who authorised, and how (e.g. email from CTO dated ...)" style="max-width:520px">
-<button class="btn" type="submit">Record consent</button></form>""")
 
     body = f"""
-<p class="small"><a href="/">← all companies</a></p>
-{f'<div class="msg {"err" if is_err else ""}">{_e(unquote(msg))}</div>' if msg else ''}
-<h2>{_e(cfg['name'])}</h2>
-<div class="card"><b>Sites:</b> {_e(', '.join(cfg.get('sites', [])) or '(none — questionnaire only)')}
-<div>{consent_zone}</div></div>
-<h2>Scan</h2>{scan_zone}
-<h2>Latest results</h2>{results}
-<h2>Alerts (latest scan vs previous)</h2>
-<table><tr><th>Type</th><th>Control</th><th>Detail</th></tr>
-{alert_rows or '<tr><td colspan="3" class="small">none</td></tr>'}</table>"""
-    return _page(cfg["name"], body, refresh=4 if running else None)
+<div class="ws-head"><div class="wrap flexh">
+<div style="flex:1;min-width:260px"><h1>{e(cfg['name'])}</h1>
+<div class="small">{e(', '.join(cfg.get('sites', [])) or 'Questionnaire-only assessment')}</div>
+<div class="chips">{chips}</div></div>{head_right}</div></div>
+<div class="wrap">
+{f'<div class="msg {"err" if is_err else ""}">{e(unquote(msg))}</div>' if msg else ''}
+<div class="steps-bar">{''.join(steps)}</div>
+{consent_zone}
+<h2>Assessment</h2>{scan_zone}
+<h2>Reports</h2>{results}
+<h2>Change alerts</h2>
+<p class="small">Raised automatically when a re-scan finds a regression, a new third party, or a rulebook change.</p>
+<table><tr><th style="width:170px">Type</th><th style="width:90px">Control</th><th>Detail</th></tr>
+{alert_rows or '<tr><td colspan="3" class="small">none — run at least two scans to compare</td></tr>'}</table>
+<p style="margin:26px 0"><a href="/" class="small">← back to home</a></p>
+</div>"""
+    return layout(cfg["name"], body, refresh=4 if running else None)
 
 
 def page_questionnaire(slug: str) -> bytes:
@@ -233,51 +200,97 @@ def page_questionnaire(slug: str) -> bytes:
     rows, last_cat = [], None
     for c in rb["controls"]:
         if c["category"] != last_cat:
-            rows.append(f'<tr><td colspan="4" class="cat">{_e(c["category"])} — {_e(cats[c["category"]])}</td></tr>')
+            rows.append(f'<tr><td colspan="4" class="cat">{e(c["category"])} — {e(cats[c["category"]])}</td></tr>')
             last_cat = c["category"]
         a = existing.get(c["id"], {})
         opts = '<option value="">— not answered —</option>' + "".join(
             f'<option value="{v}" {"selected" if a.get("status") == v else ""}>{v}</option>'
             for v in sorted(VALID))
-        ev = _e(a.get("evidence", "") if isinstance(a.get("evidence"), str)
-                else (a.get("evidence", [{}])[0].get("excerpt", "") if a.get("evidence") else ""))
-        dept = _e(a.get("source", {}).get("department", ""))
-        auto = " <span class='small'>(also auto-checked by scanner)</span>" if c["checkMethod"] in ("web", "hybrid") else ""
+        ev = e(a.get("evidence", "") if isinstance(a.get("evidence"), str) else "")
+        dept = e(a.get("source", {}).get("department", "") if isinstance(a.get("source"), dict) else "")
+        auto = ' <span class="small">(also auto-checked by scanner)</span>' if c["checkMethod"] in ("web", "hybrid") else ""
         rows.append(f"""<tr>
-<td style="width:220px"><b>{_e(c['id'])}</b> {_e(c['title'])}<div class="small">{_e(c['legalRef'])} · {_e(c['severity'])}{auto}</div></td>
-<td style="width:130px"><select name="st-{c['id']}">{opts}</select></td>
+<td style="width:250px"><b>{e(c['id'])}</b> {e(c['title'])}<div class="small">{e(c['legalRef'])} · {e(c['severity'])}{auto}</div></td>
+<td style="width:135px"><select name="st-{c['id']}">{opts}</select></td>
 <td><textarea name="ev-{c['id']}" rows="2" placeholder="Evidence / basis for this answer">{ev}</textarea></td>
 <td style="width:150px"><input type="text" name="dept-{c['id']}" value="{dept}" placeholder="Department"></td></tr>""")
 
     body = f"""
-<p class="small"><a href="/client/{slug}">← {_e(cfg['name'])}</a></p>
-<h2>Questionnaire — {_e(cfg['name'])}</h2>
-<p class="small">Manual declarations for checkpoints the scanner cannot see from outside. A declaration can
-<b>confirm</b> an automated signal but can never override a scanner-observed gap. Leave a row unanswered to keep it TBC.</p>
-<form method="post" action="/client/{slug}/questionnaire">
+<section><div class="wrap">
+<p class="small"><a href="/company/{slug}">← {e(cfg['name'])}</a></p>
+<h2>Questionnaire — {e(cfg['name'])}</h2>
+<p class="small" style="max-width:760px">Declarations for checkpoints the scanner cannot verify from outside
+(internal policies, registers, workflows). A declaration can <b>confirm</b> an automated signal but can never
+override a scanner-observed gap. Leave a row unanswered to keep it "to be confirmed".</p>
+<form method="post" action="/company/{slug}/questionnaire">
 <table><tr><th>Checkpoint</th><th>Status</th><th>Evidence</th><th>Department</th></tr>{''.join(rows)}</table>
-<p><button class="btn green" type="submit">Save answers</button>
-<span class="small">Saving re-writes questionnaire.json; run a scan afterwards to refresh statuses.</span></p></form>"""
-    return _page("Questionnaire", body)
+<p><button class="btn big green" type="submit">Save answers</button>
+<span class="small"> then run a scan to refresh your score.</span></p></form>
+</div></section>"""
+    return layout("Questionnaire", body)
 
 
-# ------------------------------------------------------------- handler ----
+def page_admin(msg: str = "") -> bytes:
+    rows = []
+    for cfg in _clients():
+        slug = cfg["slug"]
+        snap = _latest_snapshot(slug)
+        job = _job_state(slug)
+        if job and job["state"] == "running":
+            status = '<span class="spin"></span> scanning…'
+        elif snap:
+            s = summarize(snap)
+            status = (f"<b>{s['complianceScore']}%</b> &nbsp; {badge('GAP')} {s['counts']['GAP']} · "
+                      f"{badge('TBC')} {s['counts']['TBC']} <span class='small'>({e(snap['scanId'])})</span>")
+        else:
+            status = '<span class="small">never scanned</span>'
+        consent = "✅" if cfg.get("scanConsent", {}).get("granted") else "—"
+        contact = e(cfg.get("contact", ""))
+        rows.append(f"""<tr><td><a href="/company/{slug}"><b>{e(cfg['name'])}</b></a>
+<div class="small">{contact}</div></td>
+<td class="small">{e(', '.join(cfg.get('sites', [])) or '(questionnaire only)')}</td>
+<td style="text-align:center">{consent}</td><td>{status}</td>
+<td><a class="btn sm" href="/company/{slug}">Open</a></td></tr>""")
+    body = f"""
+<section><div class="wrap">
+{f'<div class="msg">{e(unquote(msg))}</div>' if msg else ''}
+<h2>Operations dashboard <span class="small">· all engagements</span></h2>
+<table><tr><th>Company</th><th>Sites</th><th>Consent</th><th>Latest result</th><th></th></tr>
+{''.join(rows) or '<tr><td colspan="5">No companies yet.</td></tr>'}</table>
+<div class="card"><h3 style="margin-top:0">Add a company (admin quick-add)</h3>
+<form method="post" action="/clients">
+<label>Company name</label><input type="text" name="name" required>
+<label>Websites (comma-separated, optional)</label><input type="text" name="sites">
+<p><button class="btn green" type="submit">Add</button></p></form></div>
+<p class="small">Data directory: <code>local/</code> (one folder per company — JSON files, no database server).
+Retention: see docs/DATA-PROTECTION-POLICY.md.
+<form method="post" action="/admin/logout" style="display:inline"><button class="btn sm gray" type="submit">Sign out</button></form></p>
+</div></section>"""
+    return layout("Admin", body, admin=True)
+
+
+# --------------------------------------------------------------- handler ---
 
 class App(BaseHTTPRequestHandler):
     server_version = "DPDPASentinel/" + __version__
 
-    def _send(self, body: bytes, ctype="text/html; charset=utf-8", code=200):
+    # -- helpers
+    def _send(self, body: bytes, ctype="text/html; charset=utf-8", code=200, cookie: str | None = None):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
         self.end_headers()
         self.wfile.write(body)
 
-    def _redirect(self, path: str):
+    def _redirect(self, path: str, cookie: str | None = None):
         self.send_response(303)
         self.send_header("Location", path)
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
         self.end_headers()
 
     def _form(self) -> dict:
@@ -285,20 +298,38 @@ class App(BaseHTTPRequestHandler):
         raw = self.rfile.read(length).decode("utf-8", errors="replace")
         return {k: v[0] for k, v in parse_qs(raw, keep_blank_values=True).items()}
 
+    def _is_admin(self) -> bool:
+        cookies = self.headers.get("Cookie", "")
+        for part in cookies.split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "dpdpa_session" and v in _sessions:
+                return True
+        return False
+
     def log_message(self, fmt, *args):
         pass
 
+    # -- GET
     def do_GET(self):
         try:
             u = urlparse(self.path)
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
             parts = [p for p in u.path.split("/") if p]
+
             if not parts:
-                return self._send(page_dashboard(q.get("msg", "")))
-            if parts[0] == "client" and len(parts) >= 2:
+                return self._send(landing())
+            if parts == ["start"]:
+                return self._send(start_form())
+            if parts[0] == "admin":
+                if not self._is_admin():
+                    return self._send(admin_login(q.get("msg", "")))
+                return self._send(page_admin(q.get("msg", "")))
+            if parts[0] in ("company", "client") and len(parts) >= 2:
                 slug = unquote(parts[1])
+                if parts[0] == "client":  # legacy URLs
+                    return self._redirect("/company/" + "/".join(parts[1:]))
                 if len(parts) == 2:
-                    return self._send(page_client(slug, q.get("msg", ""), q.get("err") == "1"))
+                    return self._send(page_company(slug, q.get("msg", ""), q.get("err") == "1"))
                 if parts[2] == "questionnaire":
                     return self._send(page_questionnaire(slug))
                 if parts[2] == "report" and len(parts) == 4 and "/" not in parts[3] and "\\" not in parts[3]:
@@ -306,27 +337,65 @@ class App(BaseHTTPRequestHandler):
                     if f.is_file() and f.suffix in (".html", ".json"):
                         ctype = "application/json" if f.suffix == ".json" else "text/html; charset=utf-8"
                         return self._send(f.read_bytes(), ctype)
-                    return self._send(_page("Not found", "<p>Report not generated yet — run a scan.</p>"), code=404)
-            return self._send(_page("Not found", "<p>404 — <a href='/'>back</a></p>"), code=404)
+                    return self._send(layout("Not found", "<section><div class='wrap'><p>Report not generated yet — run a scan first.</p></div></section>"), code=404)
+            return self._send(layout("Not found", "<section><div class='wrap'><p>404 — <a href='/'>home</a></p></div></section>"), code=404)
         except Exception as ex:
             traceback.print_exc()
-            return self._send(_page("Error", f"<div class='msg err'>{_e(type(ex).__name__)}: {_e(ex)}</div>"), code=500)
+            return self._send(layout("Error", f"<section><div class='wrap'><div class='msg err'>{e(type(ex).__name__)}: {e(ex)}</div></div></section>"), code=500)
 
+    # -- POST
     def do_POST(self):
         try:
             u = urlparse(self.path)
             parts = [p for p in u.path.split("/") if p]
             form = self._form()
 
-            if parts == ["clients"]:
+            if parts == ["start"]:
                 name = form.get("name", "").strip()
                 if not name:
-                    return self._redirect("/?msg=" + quote("Company name is required"))
+                    return self._send(start_form("Company name is required."))
                 sites = [s.strip() for s in form.get("sites", "").split(",") if s.strip()]
                 slug = init_client(name, sites)
-                return self._redirect(f"/client/{slug}?msg=" + quote("Company created. Record scan consent, fill the questionnaire, then run a scan."))
+                cfg = load_client(slug)
+                cfg["contact"] = form.get("contact", "").strip()
+                if form.get("consent") == "1" and sites:
+                    cfg["scanConsent"] = {"granted": True,
+                                          "grantedBy": cfg["contact"] or "authorised at onboarding",
+                                          "date": date.today().isoformat(),
+                                          "note": "Authorised during onboarding — keep the written record on file."}
+                save_json(client_dir(slug) / "client.json", cfg)
+                welcome = "Workspace created. " + (
+                    "Run your first assessment when ready." if cfg["scanConsent"].get("granted")
+                    else "Record scan consent below when your organisation is ready, or start with the questionnaire.")
+                return self._redirect(f"/company/{slug}?msg=" + quote(welcome))
 
-            if len(parts) == 3 and parts[0] == "client":
+            if parts == ["admin", "login"]:
+                pw = os.environ.get("DPDPA_ADMIN_PASSWORD", "dpdpa-admin")
+                if hmac.compare_digest(form.get("password", ""), pw):
+                    token = secrets.token_urlsafe(24)
+                    _sessions.add(token)
+                    return self._redirect("/admin", cookie=f"dpdpa_session={token}; HttpOnly; SameSite=Lax; Path=/")
+                return self._send(admin_login("Wrong password."))
+
+            if parts == ["admin", "logout"]:
+                cookies = self.headers.get("Cookie", "")
+                for part in cookies.split(";"):
+                    k, _, v = part.strip().partition("=")
+                    if k == "dpdpa_session":
+                        _sessions.discard(v)
+                return self._redirect("/", cookie="dpdpa_session=; Max-Age=0; Path=/")
+
+            if parts == ["clients"]:  # admin quick-add
+                if not self._is_admin():
+                    return self._redirect("/admin")
+                name = form.get("name", "").strip()
+                if not name:
+                    return self._redirect("/admin?msg=" + quote("Company name is required"))
+                sites = [s.strip() for s in form.get("sites", "").split(",") if s.strip()]
+                slug = init_client(name, sites)
+                return self._redirect(f"/company/{slug}")
+
+            if len(parts) == 3 and parts[0] == "company":
                 slug, action = unquote(parts[1]), parts[2]
                 cfg = load_client(slug)
 
@@ -336,21 +405,21 @@ class App(BaseHTTPRequestHandler):
                                           "date": date.today().isoformat(),
                                           "note": "Recorded via web UI — keep the written authorisation on file."}
                     save_json(client_dir(slug) / "client.json", cfg)
-                    return self._redirect(f"/client/{slug}?msg=" + quote("Consent recorded."))
+                    return self._redirect(f"/company/{slug}?msg=" + quote("Scan authorisation recorded."))
 
                 if action == "scan":
                     skip_web = "skipweb=1" in (u.query or "")
                     if not skip_web and not cfg.get("scanConsent", {}).get("granted"):
-                        return self._redirect(f"/client/{slug}?err=1&msg=" + quote("Web scan blocked: record consent first (or run questionnaire-only)."))
+                        return self._redirect(f"/company/{slug}?err=1&msg=" + quote("Web scan blocked: record authorisation first (or run questionnaire-only)."))
                     if not skip_web and not cfg.get("sites"):
                         skip_web = True
                     _start_scan(slug, skip_web)
-                    return self._redirect(f"/client/{slug}")
+                    return self._redirect(f"/company/{slug}")
 
                 if action == "questionnaire":
                     path = client_dir(slug) / "questionnaire.json"
-                    q = load_json(path, {})
-                    old = {a["controlId"]: a for a in q.get("assertions", [])}
+                    qn = load_json(path, {})
+                    old = {a["controlId"]: a for a in qn.get("assertions", [])}
                     rb = load_rulebook()
                     assertions = []
                     for c in rb["controls"]:
@@ -367,14 +436,14 @@ class App(BaseHTTPRequestHandler):
                             "source": {"department": form.get(f"dept-{cid}", "").strip() or src.get("department", ""),
                                        "respondent": "web-ui", "date": date.today().isoformat()},
                         })
-                    q["assertions"] = assertions
-                    save_json(path, q)
-                    return self._redirect(f"/client/{slug}?msg=" + quote(f"Saved {len(assertions)} answers. Run a scan to refresh statuses."))
+                    qn["assertions"] = assertions
+                    save_json(path, qn)
+                    return self._redirect(f"/company/{slug}?msg=" + quote(f"Saved {len(assertions)} answers. Run an assessment to refresh your score."))
 
-            return self._send(_page("Not found", "<p>404</p>"), code=404)
+            return self._send(layout("Not found", "<section><div class='wrap'><p>404</p></div></section>"), code=404)
         except Exception as ex:
             traceback.print_exc()
-            return self._send(_page("Error", f"<div class='msg err'>{_e(type(ex).__name__)}: {_e(ex)}</div>"), code=500)
+            return self._send(layout("Error", f"<section><div class='wrap'><div class='msg err'>{e(type(ex).__name__)}: {e(ex)}</div></div></section>"), code=500)
 
 
 def serve(slug: str | None = None, port: int = 8377, host: str = "127.0.0.1") -> None:
