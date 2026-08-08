@@ -115,21 +115,6 @@ def _score_color(score: float) -> str:
 
 # ----------------------------------------------------------------- pages ---
 
-SCAN_COOLDOWN_SECONDS = 900  # client-initiated assessments limited to 1 per 15 min
-
-
-def _seconds_since_last_scan(slug: str) -> float | None:
-    from datetime import datetime, timezone
-    snaps = list_snapshots(slug)
-    if not snaps:
-        return None
-    try:
-        ts = datetime.strptime(snaps[-1].stem, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
-        return (datetime.now(timezone.utc) - ts).total_seconds()
-    except ValueError:
-        return None
-
-
 def _report_tiles(slug: str, snap: dict) -> str:
     return f"""
 <div class="grid c3" style="margin-top:6px">
@@ -234,31 +219,31 @@ def page_company(slug: str, msg: str = "", is_err: bool = False, is_admin: bool 
 <input type="text" name="grantedBy" required placeholder="Your name, designation and basis of authorisation" style="max-width:520px">
 <button class="btn sm" type="submit">Authorise website scan</button></form></div>"""
 
-        if running:
-            submit_zone = running_note
+        submission = cfg.get("submission", {})
+        submitted = submission.get("submitted")
+        pending = cfg.get("pendingAssessment")
+        submit_btn = (f'<form method="post" action="/company/{slug}/submit">'
+                      f'<button class="btn big green" type="submit">'
+                      f'{"Re-submit updated inputs" if submitted else "Submit my inputs →"}</button></form>')
+        if pending:
+            submit_zone = (f'<div class="card">🔔 <b>Your inputs were submitted on {e(submission.get("at",""))}.</b> '
+                           f'Our DPDPA assessment team is preparing your report — it will appear below when ready. '
+                           f'You don\'t need to do anything else.'
+                           f'<div style="margin-top:10px">Changed something since submitting? {submit_btn}</div></div>')
         elif snap:
-            secs = _seconds_since_last_scan(slug)
-            can = secs is None or secs > SCAN_COOLDOWN_SECONDS
-            resubmit = (f'<form method="post" action="/company/{slug}/scan">'
-                        f'<button class="btn" type="submit">↻ Update &amp; re-run assessment</button></form>'
-                        if can else
-                        f'<span class="small">You can refresh the assessment again in about '
-                        f'{int((SCAN_COOLDOWN_SECONDS - secs)/60)+1} minutes. Your engagement team can also re-run it anytime.</span>')
-            submit_zone = (f'<div class="card">✅ Your latest report is ready below. '
-                           f'Updated your questionnaire or access details? {resubmit}</div>')
+            submit_zone = (f'<div class="card">✅ Your report is ready below (assessment completed '
+                           f'{e(snap["scanId"])}). Updated your questionnaire or access details since? '
+                           f'Re-submit and your team will refresh it.<div style="margin-top:10px">{submit_btn}</div></div>')
         else:
-            submit_zone = f"""
-<div class="card">
-<p>When your inputs are in, submit for assessment. We evaluate every applicable checkpoint and prepare your report.</p>
-<form method="post" action="/company/{slug}/scan">
-<button class="btn big green" type="submit">Submit for assessment →</button></form>
-<p class="small" style="margin-top:8px">You don't manage scans or schedules — submit once and read your report.
-Your engagement team keeps it monitored.</p></div>"""
+            submit_zone = (f'<div class="card"><p>When your inputs are in, submit them. '
+                           f'Our assessment team then prepares your DPDPA report — you don\'t run anything yourself.</p>'
+                           f'{submit_btn}<p class="small" style="margin-top:8px">Submitting shares your questionnaire '
+                           f'and any access you granted with your engagement team, who run the assessment for you.</p></div>')
 
         reports_zone = (f"<h2>Your report</h2>{_report_tiles(slug, snap)}"
                         f'<p class="small">Latest {e(snap["scanId"])} · rulebook v{e(snap["rulebookVersion"])}</p>'
                         if snap else
-                        "<h2>Your report</h2><p class='small'>Your report appears here once the assessment has run.</p>")
+                        "<h2>Your report</h2><p class='small'>Your report appears here once your assessment team has prepared it.</p>")
 
         body = f"""{header}<div class="wrap">
 {f'<div class="msg {"err" if is_err else ""}">{e(unquote(msg))}</div>' if msg else ''}
@@ -324,9 +309,15 @@ each access grant carries its own consent. We identify gaps — we never change 
         f"<tr><td><b>{e(a['type'])}</b></td><td>{e(a.get('controlId', ''))}</td><td>{e(a.get('detail', ''))}</td></tr>"
         for a in alerts.get("alerts", []))
 
+    sub = cfg.get("submission", {})
+    pending_banner = (f'<div class="msg" style="background:#fff8e6;border-color:#e6d9a8">🔔 <b>Client submitted their '
+                      f'inputs on {e(sub.get("at",""))}</b> ({e(sub.get("by",""))}). Review and run the assessment below.</div>'
+                      if cfg.get("pendingAssessment") else "")
+
     body = f"""{header}<div class="wrap">
 <div class="msg" style="background:#eef2f6;border-color:#c9d6e2"><b>Admin / operator view</b> —
 full controls. The client sees only their inputs and report.</div>
+{pending_banner}
 {f'<div class="msg {"err" if is_err else ""}">{e(unquote(msg))}</div>' if msg else ''}
 {admin_consent}
 <h2>Run assessment</h2>{scan_zone}
@@ -509,6 +500,9 @@ def page_admin(msg: str = "") -> bytes:
         contact = e(cfg.get("contact", ""))
         auth_email = cfg.get("auth", {}).get("email", "")
         reset_label = "Reset login" if auth_email else "Create login"
+        sub = cfg.get("submission", {})
+        if cfg.get("pendingAssessment"):
+            status = f'🔔 <b style="color:var(--bad)">Client submitted — ready to assess</b> <span class="small">({e(sub.get("at",""))})</span><br>' + status
         rows.append(f"""<tr><td><a href="/company/{slug}"><b>{e(cfg['name'])}</b></a>
 <div class="small">{contact}</div></td>
 <td class="small">{e(', '.join(cfg.get('sites', [])) or '(questionnaire only)')}</td>
@@ -777,23 +771,29 @@ class App(BaseHTTPRequestHandler):
                     save_json(client_dir(slug) / "client.json", cfg)
                     return self._redirect(f"/company/{slug}?msg=" + quote("Scan authorisation recorded."))
 
+                if action == "submit":
+                    # Client action: file inputs for the engagement team. Never runs a scan.
+                    cfg["submission"] = {"submitted": True, "at": date.today().isoformat(),
+                                         "by": cfg.get("auth", {}).get("email", "") or cfg.get("contact", ""),
+                                         "note": "Inputs submitted for assessment via workspace"}
+                    cfg["pendingAssessment"] = True
+                    save_json(client_dir(slug) / "client.json", cfg)
+                    return self._redirect(f"/company/{slug}?msg=" + quote(
+                        "Thank you — your inputs are submitted. Your DPDPA assessment team will prepare your report."))
+
                 if action == "scan":
-                    skip_web = "skipweb=1" in (u.query or "")
-                    # Clients cannot choose skip_web and are rate-limited to prevent abuse
+                    # Running an assessment is an operator-only action.
                     if not self._is_admin():
-                        secs = _seconds_since_last_scan(slug)
-                        if secs is not None and secs < SCAN_COOLDOWN_SECONDS:
-                            return self._redirect(f"/company/{slug}?err=1&msg=" + quote(
-                                f"An assessment ran recently — please wait about {int((SCAN_COOLDOWN_SECONDS - secs)/60)+1} "
-                                "minutes before re-running, or ask your engagement team."))
-                        skip_web = not cfg.get("sites")  # client always gets full scan where sites exist
+                        return self._redirect(f"/company/{slug}?err=1&msg=" + quote(
+                            "Assessments are run by your DPDPA engagement team. Submit your inputs and your report will follow."))
+                    skip_web = "skipweb=1" in (u.query or "")
                     if not skip_web and not cfg.get("scanConsent", {}).get("granted"):
-                        if not cfg.get("sites"):
-                            skip_web = True
-                        else:
-                            return self._redirect(f"/company/{slug}?err=1&msg=" + quote("Please authorise the website scan first."))
+                        return self._redirect(f"/company/{slug}?err=1&msg=" + quote("Client has not authorised the website scan yet (or run questionnaire-only)."))
                     if not skip_web and not cfg.get("sites"):
                         skip_web = True
+                    if cfg.get("pendingAssessment"):  # operator is now acting on the client's submission
+                        cfg["pendingAssessment"] = False
+                        save_json(client_dir(slug) / "client.json", cfg)
                     _start_scan(slug, skip_web)
                     return self._redirect(f"/company/{slug}")
 
