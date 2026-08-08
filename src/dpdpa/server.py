@@ -195,6 +195,23 @@ read-only visits to your public pages — no credentials, no form submissions, n
         f"<tr><td><b>{e(a['type'])}</b></td><td>{e(a.get('controlId', ''))}</td><td>{e(a.get('detail', ''))}</td></tr>"
         for a in alerts.get("alerts", []))
 
+    conns = load_json(client_dir(slug) / "connectors.json", {})
+    aws_conn = conns.get("aws", {})
+    aws_meta = (snap or {}).get("meta", {})
+    if aws_conn.get("consent", {}).get("granted") and aws_conn.get("accessKeyId"):
+        acct = aws_meta.get("awsAccount")
+        detail = (f"Account {e(acct)} · region {e(aws_meta.get('awsRegion',''))} · "
+                  f"{aws_meta.get('s3Buckets','?')} buckets read on last scan"
+                  if acct else "Credentials saved — run an assessment to pull posture.")
+        aws_cov = (f'<tr><td>☁️ Cloud posture — AWS</td>'
+                   f'<td><b style="color:var(--ok)">Connected</b></td>'
+                   f'<td class="small">{detail} · <a href="/company/{slug}/connectors">manage</a></td></tr>')
+    else:
+        aws_cov = (f'<tr><td>☁️ Cloud posture — AWS</td>'
+                   f'<td><span style="color:var(--acc)">Ready to connect</span></td>'
+                   f'<td class="small">Read-only posture checks (S3 encryption, public access, CloudTrail, '
+                   f'security groups, RDS, IAM). <a href="/company/{slug}/connectors">Connect AWS →</a></td></tr>')
+
     body = f"""
 <div class="ws-head"><div class="wrap flexh">
 <div style="flex:1;min-width:260px"><h1>{e(cfg['name'])}</h1>
@@ -205,6 +222,19 @@ read-only visits to your public pages — no credentials, no form submissions, n
 <div class="steps-bar">{''.join(steps)}</div>
 {consent_zone}
 <h2>Assessment</h2>{scan_zone}
+<h2>What this assessment covers</h2>
+<table>
+<tr><th style="width:230px">Surface</th><th style="width:130px">Status</th><th>Detail</th></tr>
+<tr><td>🌐 Public websites &amp; catalogs</td><td>{'<b style="color:var(--ok)">Scanned</b>' if (snap and has_sites and snap.get('meta', {}).get('pagesScanned')) else ('Ready' if has_sites else '—')}</td>
+<td class="small">{e(', '.join(cfg.get('sites', [])) or 'no sites listed')}{f" · {len(snap.get('meta', {}).get('pagesScanned', []))} pages read on last scan" if snap and snap.get('meta', {}).get('pagesScanned') else ''}</td></tr>
+<tr><td>📋 Departmental questionnaire</td><td>{'<b style="color:var(--ok)">In use</b>' if n_answered else 'Pending'}</td>
+<td class="small">{n_answered}/57 checkpoints declared</td></tr>
+{aws_cov}
+<tr><td>💻 Endpoints &amp; antivirus (Intune / Defender / EDR)</td><td><span style="color:var(--na)">Not connected</span></td>
+<td class="small">Connector on roadmap — device counts, encryption and AV coverage from your existing management tools.</td></tr>
+<tr><td>🏢 Directory &amp; firewall policies (AD / GPO / firewall)</td><td><span style="color:var(--na)">Not connected</span></td>
+<td class="small">Collector on roadmap — run by your own administrators; we never hold domain credentials.</td></tr>
+</table>
 <h2>Reports</h2>{results}
 <h2>Change alerts</h2>
 <p class="small">Raised automatically when a re-scan finds a regression, a new third party, or a rulebook change.</p>
@@ -260,6 +290,65 @@ override a scanner-observed gap. Leave a row unanswered to keep it "to be confir
 <span class="small"> then run a scan to refresh your score.</span></p></form>
 </div></section>"""
     return layout("Questionnaire", body)
+
+
+def page_connectors(slug: str, msg: str = "", is_err: bool = False) -> bytes:
+    cfg = load_client(slug)
+    conns = load_json(client_dir(slug) / "connectors.json", {})
+    aws = conns.get("aws", {})
+    connected = aws.get("consent", {}).get("granted") and aws.get("accessKeyId")
+    key_hint = ("••••••••" + aws["accessKeyId"][-4:]) if aws.get("accessKeyId") else ""
+
+    status_line = (f'<p>✅ <b>AWS connected</b> — key {e(key_hint)}, region {e(aws.get("region", ""))}, '
+                   f'authorised by {e(aws.get("consent", {}).get("grantedBy", ""))} '
+                   f'on {e(aws.get("consent", {}).get("date", ""))}.</p>'
+                   f'<form method="post" action="/company/{slug}/connectors/aws/disconnect">'
+                   f'<button class="btn sm red" type="submit">Disconnect &amp; delete credentials</button></form>'
+                   if connected else "")
+
+    body = f"""
+<section><div class="wrap" style="max-width:820px">
+<p class="small"><a href="/company/{slug}">← {e(cfg['name'])}</a></p>
+<h2>Connectors — infrastructure &amp; cloud</h2>
+{f'<div class="msg {"err" if is_err else ""}">{e(unquote(msg))}</div>' if msg else ''}
+<div class="card">
+<h3 style="margin-top:0">☁️ Amazon Web Services <span class="small">— live, read-only</span></h3>
+<p style="font-size:14px">Connect a <b>read-only</b> AWS principal and each assessment will verify your
+cloud posture automatically: S3 public-access block and encryption, CloudTrail audit logging,
+security-group exposure, RDS encryption at rest, and IAM hygiene (root MFA, key age).</p>
+<div class="notice"><b>How to create safe credentials (2 minutes):</b>
+<ol style="margin:8px 0 0 18px;padding:0">
+<li>In the AWS console → IAM → Users → create a user, e.g. <code>dpdpa-readonly</code>.</li>
+<li>Attach the AWS-managed policy <code>SecurityAudit</code> (read-only — no ability to change anything).</li>
+<li>Create an access key for that user and paste it below.</li>
+</ol>
+We use the key only to read configuration, never to modify resources, and never store your data —
+only posture findings. You can disconnect and delete the key here anytime.</div>
+{status_line}
+<form method="post" action="/company/{slug}/connectors/aws">
+<label>AWS Access Key ID</label>
+<input type="text" name="accessKeyId" placeholder="AKIA..." {'value=""' if connected else ''} autocomplete="off">
+<label>AWS Secret Access Key</label>
+<input type="password" name="secretAccessKey" placeholder="{'leave blank to keep existing' if connected else ''}" autocomplete="off">
+<label>Default region</label>
+<input type="text" name="region" value="{e(aws.get('region', 'ap-south-1'))}" placeholder="ap-south-1">
+<div class="consent-box">
+<label style="margin:0;font-weight:600"><input type="checkbox" name="consent" value="1" style="width:auto;margin-right:8px" {'checked' if connected else ''}>
+I authorise {PRODUCT_NAME} to run read-only posture checks against this AWS account using these credentials.</label>
+</div>
+<button class="btn green" type="submit">{'Update AWS connection' if connected else 'Connect AWS &amp; save'}</button>
+</form></div>
+
+<div class="card" style="opacity:.7">
+<h3 style="margin-top:0">Microsoft Azure · Google Cloud · Endpoints (Intune/Defender) · AD/GPO · Firewalls
+<span class="small">— specified, on roadmap</span></h3>
+<p style="font-size:14px">The connector framework and checkpoints are ready
+(see the engineering spec). These plug into the same assessment with read-only,
+consent-gated access. Ask your engagement manager for the delivery timeline.</p></div>
+<p class="small">Credentials are stored in this workspace's <code>connectors.json</code>.
+For production, move them to a managed secrets vault — see docs/DOTNET-IMPLEMENTATION-GUIDE.md.</p>
+</div></section>"""
+    return layout("Connectors", body)
 
 
 def page_admin(msg: str = "") -> bytes:
@@ -383,6 +472,8 @@ class App(BaseHTTPRequestHandler):
                     return self._send(page_company(slug, q.get("msg", ""), q.get("err") == "1"))
                 if parts[2] == "questionnaire":
                     return self._send(page_questionnaire(slug))
+                if parts[2] == "connectors":
+                    return self._send(page_connectors(slug, q.get("msg", ""), q.get("err") == "1"))
                 if parts[2] == "report" and len(parts) == 4 and "/" not in parts[3] and "\\" not in parts[3]:
                     f = client_dir(slug) / "reports" / parts[3]
                     if f.is_file() and f.suffix in (".html", ".json"):
@@ -492,6 +583,35 @@ class App(BaseHTTPRequestHandler):
                 sites = [s.strip() for s in form.get("sites", "").split(",") if s.strip()]
                 slug = init_client(name, sites)
                 return self._redirect(f"/company/{slug}")
+
+            if len(parts) >= 4 and parts[0] == "company" and parts[2] == "connectors":
+                slug = unquote(parts[1])
+                if not self._may_access(slug):
+                    return self._redirect("/login?msg=" + quote("Please sign in to access your workspace."))
+                path = client_dir(slug) / "connectors.json"
+                conns = load_json(path, {})
+                if parts[3] == "aws" and len(parts) == 4:
+                    key = form.get("accessKeyId", "").strip()
+                    secret = form.get("secretAccessKey", "")
+                    existing = conns.get("aws", {})
+                    if not form.get("consent"):
+                        return self._redirect(f"/company/{slug}/connectors?err=1&msg=" + quote("Tick the authorisation box to connect AWS."))
+                    if not key and not existing.get("accessKeyId"):
+                        return self._redirect(f"/company/{slug}/connectors?err=1&msg=" + quote("Access Key ID is required."))
+                    conns["aws"] = {
+                        "accessKeyId": key or existing.get("accessKeyId", ""),
+                        "secretAccessKey": secret or existing.get("secretAccessKey", ""),
+                        "region": form.get("region", "").strip() or existing.get("region", "ap-south-1"),
+                        "consent": {"granted": True,
+                                    "grantedBy": load_client(slug).get("contact", "authorised in workspace"),
+                                    "date": date.today().isoformat()},
+                    }
+                    save_json(path, conns)
+                    return self._redirect(f"/company/{slug}/connectors?msg=" + quote("AWS connected. Run an assessment to pull your cloud posture."))
+                if parts[3] == "aws" and len(parts) == 5 and parts[4] == "disconnect":
+                    conns.pop("aws", None)
+                    save_json(path, conns)
+                    return self._redirect(f"/company/{slug}/connectors?msg=" + quote("AWS disconnected and credentials deleted."))
 
             if len(parts) == 3 and parts[0] == "company":
                 slug, action = unquote(parts[1]), parts[2]

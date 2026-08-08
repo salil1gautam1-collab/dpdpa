@@ -84,7 +84,6 @@ def main(argv=None):
 
     elif args.cmd == "demo":
         from .workspace import save_json
-        from .engine import run_scan
         from .report import generate
         demos = {
             "Demo Manufacturing Co (dummy)": [

@@ -7,6 +7,9 @@
 local/
 *.client.json
 *.evidence.json
+# Cloud/infra credentials — never commit, even if a workspace escapes local/
+connectors.json
+*.credentials.json
 
 # Python
 __pycache__/
