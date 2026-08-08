@@ -171,4 +171,6 @@ def generate(slug: str, snapshot: dict | None = None) -> list[str]:
     p = outdir / "summary.json"
     p.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     written.append(str(p))
+    from . import report_premium
+    written.append(report_premium.generate(slug, snapshot))
     return written

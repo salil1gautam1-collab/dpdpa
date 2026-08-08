@@ -117,13 +117,16 @@ def _score_color(score: float) -> str:
 
 def _report_tiles(slug: str, snap: dict) -> str:
     return f"""
-<div class="grid c3" style="margin-top:6px">
+<div class="grid c4" style="margin-top:6px">
+<div class="tile" style="border-color:#0d6efd"><div class="ico">📕</div><h3>Client Report (PDF)</h3>
+<p>Branded, print-ready deliverable — cover, executive summary, findings, evidence.</p>
+<p style="margin-top:12px"><a class="btn sm" href="/company/{slug}/report/client-report.html" target="_blank">Open &amp; save as PDF</a></p></div>
 <div class="tile"><div class="ico">📄</div><h3>Phase 1 — Discovery</h3>
-<p>Your data footprint: pages, cookies, trackers, forms, questionnaire coverage.</p>
-<p style="margin-top:12px"><a class="btn sm" href="/company/{slug}/report/phase1-discovery.html">Open report</a></p></div>
+<p>Data footprint: pages, cookies, trackers, forms, questionnaire coverage.</p>
+<p style="margin-top:12px"><a class="btn sm gray" href="/company/{slug}/report/phase1-discovery.html">Open</a></p></div>
 <div class="tile"><div class="ico">📊</div><h3>Phase 2 — Gap Assessment</h3>
 <p>Every checkpoint graded with severity, evidence and recommendations.</p>
-<p style="margin-top:12px"><a class="btn sm" href="/company/{slug}/report/phase2-gap-assessment.html">Open report</a></p></div>
+<p style="margin-top:12px"><a class="btn sm gray" href="/company/{slug}/report/phase2-gap-assessment.html">Open</a></p></div>
 <div class="tile"><div class="ico">🧾</div><h3>Machine-readable</h3>
 <p>Summary JSON for your GRC tooling or board pack.</p>
 <p style="margin-top:12px"><a class="btn sm gray" href="/company/{slug}/report/summary.json">summary.json</a></p></div>
