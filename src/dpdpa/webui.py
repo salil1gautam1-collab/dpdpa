@@ -103,7 +103,7 @@ def layout(title: str, body: str, refresh: int | None = None, admin: bool = Fals
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{e(title)} — {PRODUCT_NAME}</title><style>{CSS}</style></head><body>
 <nav><div class="wrap"><span class="brand"><a href="/">🛡 {PRODUCT_NAME}</a></span>
-<span><a href="/#how">How it works</a><a href="/start">Start assessment</a>{admin_link}</span></div></nav>
+<span><a href="/#how">How it works</a><a href="/start">Start assessment</a><a href="/login">Company sign-in</a>{admin_link}</span></div></nav>
 {body}
 <footer><div class="wrap">© 2026 {PRODUCT_NAME} v{__version__} · Compliance intelligence for the Digital Personal
 Data Protection Act, 2023 &amp; DPDP Rules, 2025 · This tool identifies gaps and records evidence;
@@ -198,6 +198,12 @@ def start_form(msg: str = "") -> bytes:
 <div class="hint">Leave empty for a questionnaire-only assessment (no site scanning).</div>
 <label>Your name &amp; designation *</label>
 <input type="text" name="contact" required placeholder="e.g. R. Sharma, Chief Technology Officer">
+<label>Work email (your sign-in ID) *</label>
+<input type="text" name="email" required placeholder="e.g. compliance@acme.example">
+<label>Choose a password * <span class="hint" style="display:inline;font-weight:400">(minimum 10 characters)</span></label>
+<input type="password" name="password" required minlength="10">
+<div class="hint">You'll use this email and password to sign back in to your workspace anytime.
+Passwords are stored only as salted PBKDF2 hashes.</div>
 <div class="consent-box">
 <label style="margin:0;font-weight:600"><input type="checkbox" name="consent" value="1" style="width:auto;margin-right:8px">
 I authorise {PRODUCT_NAME} to run passive, read-only scans of the public websites listed above.</label>
@@ -211,6 +217,22 @@ web scanning stays disabled until you do. Questionnaire-only assessment needs no
 it is not legal advice, and remediation runs only with your explicit consent, access and permissions.</p>
 </div></section>"""
     return layout("Start your assessment", body)
+
+
+def company_login(msg: str = "") -> bytes:
+    body = f"""
+<section><div class="wrap" style="max-width:440px">
+<h2 class="sec">Company sign-in</h2>
+<p class="sub">Access your assessment workspace.</p>
+{f'<div class="msg err">{e(msg)}</div>' if msg else ''}
+<div class="card"><form method="post" action="/login">
+<label>Work email</label><input type="text" name="email" required autofocus>
+<label>Password</label><input type="password" name="password" required>
+<p><button class="btn" type="submit">Sign in</button></p>
+<div class="hint">New here? <a href="/start">Start your assessment</a> — it creates your login.
+Forgotten password? Contact your engagement manager to reset it.</div>
+</form></div></div></section>"""
+    return layout("Company sign-in", body)
 
 
 def admin_login(msg: str = "") -> bytes:

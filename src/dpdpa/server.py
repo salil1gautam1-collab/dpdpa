@@ -11,6 +11,7 @@ internally and compose publishes the port to localhost only.
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import os
@@ -25,13 +26,37 @@ from . import PRODUCT_NAME, __version__
 from .engine import run_scan, summarize
 from .rulebook import load_rulebook
 from .scanners.questionnaire import VALID
-from .webui import badge, e, landing, layout, start_form, admin_login, STATUS_COLORS
+from .webui import (badge, e, landing, layout, start_form, admin_login,
+                    company_login, STATUS_COLORS)
 from .workspace import (LOCAL_ROOT, client_dir, init_client, list_snapshots,
                         load_client, load_json, save_json)
 
 _jobs: dict = {}
 _jobs_lock = threading.Lock()
-_sessions: set = set()
+_sessions: set = set()          # admin session tokens
+_co_sessions: dict = {}         # company session token -> slug
+
+PBKDF2_ITERS = 200_000
+
+
+def hash_password(password: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"),
+                               bytes.fromhex(salt), PBKDF2_ITERS).hex()
+
+
+def set_company_auth(cfg: dict, email: str, password: str) -> None:
+    salt = secrets.token_hex(16)
+    cfg["auth"] = {"email": email.strip().lower(), "salt": salt,
+                   "hash": hash_password(password, salt),
+                   "algo": f"pbkdf2-sha256-{PBKDF2_ITERS}"}
+
+
+def find_company_by_email(email: str) -> dict | None:
+    email = email.strip().lower()
+    for cfg in _clients():
+        if cfg.get("auth", {}).get("email") == email:
+            return cfg
+    return None
 
 SCORE_COLORS = [(80, "var(--ok)"), (50, "var(--warn)"), (0, "var(--bad)")]
 
@@ -185,7 +210,14 @@ read-only visits to your public pages — no credentials, no form submissions, n
 <p class="small">Raised automatically when a re-scan finds a regression, a new third party, or a rulebook change.</p>
 <table><tr><th style="width:170px">Type</th><th style="width:90px">Control</th><th>Detail</th></tr>
 {alert_rows or '<tr><td colspan="3" class="small">none — run at least two scans to compare</td></tr>'}</table>
-<p style="margin:26px 0"><a href="/" class="small">← back to home</a></p>
+{f'''<h2>Account</h2>
+<div class="card" style="max-width:520px"><b>Sign-in:</b> {e(cfg["auth"]["email"])}
+<form method="post" action="/company/{slug}/password">
+<label>Current password</label><input type="password" name="current" required>
+<label>New password (min 10 characters)</label><input type="password" name="new" required minlength="10">
+<p><button class="btn sm" type="submit">Change password</button></p></form></div>''' if cfg.get("auth") else ''}
+<p style="margin:26px 0"><a href="/" class="small">← back to home</a> &nbsp;·&nbsp;
+<form method="post" action="/logout" style="display:inline"><button class="btn sm gray" type="submit">Sign out</button></form></p>
 </div>"""
     return layout(cfg["name"], body, refresh=4 if running else None)
 
@@ -246,11 +278,17 @@ def page_admin(msg: str = "") -> bytes:
             status = '<span class="small">never scanned</span>'
         consent = "✅" if cfg.get("scanConsent", {}).get("granted") else "—"
         contact = e(cfg.get("contact", ""))
+        auth_email = cfg.get("auth", {}).get("email", "")
+        reset_label = "Reset login" if auth_email else "Create login"
         rows.append(f"""<tr><td><a href="/company/{slug}"><b>{e(cfg['name'])}</b></a>
 <div class="small">{contact}</div></td>
 <td class="small">{e(', '.join(cfg.get('sites', [])) or '(questionnaire only)')}</td>
 <td style="text-align:center">{consent}</td><td>{status}</td>
-<td><a class="btn sm" href="/company/{slug}">Open</a></td></tr>""")
+<td><a class="btn sm" href="/company/{slug}">Open</a>
+<form method="post" action="/admin/reset" style="margin-top:6px">
+<input type="hidden" name="slug" value="{slug}">
+<input type="text" name="email" value="{e(auth_email)}" placeholder="client sign-in email" style="max-width:180px;font-size:12px;padding:5px 8px">
+<button class="btn sm gray" type="submit">{reset_label}</button></form></td></tr>""")
     body = f"""
 <section><div class="wrap">
 {f'<div class="msg">{e(unquote(msg))}</div>' if msg else ''}
@@ -298,13 +336,22 @@ class App(BaseHTTPRequestHandler):
         raw = self.rfile.read(length).decode("utf-8", errors="replace")
         return {k: v[0] for k, v in parse_qs(raw, keep_blank_values=True).items()}
 
-    def _is_admin(self) -> bool:
-        cookies = self.headers.get("Cookie", "")
-        for part in cookies.split(";"):
+    def _cookie(self, name: str) -> str | None:
+        for part in self.headers.get("Cookie", "").split(";"):
             k, _, v = part.strip().partition("=")
-            if k == "dpdpa_session" and v in _sessions:
-                return True
-        return False
+            if k == name:
+                return v
+        return None
+
+    def _is_admin(self) -> bool:
+        return self._cookie("dpdpa_session") in _sessions
+
+    def _company_slug(self) -> str | None:
+        """Slug of the signed-in company, if any."""
+        return _co_sessions.get(self._cookie("dpdpa_co") or "")
+
+    def _may_access(self, slug: str) -> bool:
+        return self._is_admin() or self._company_slug() == slug
 
     def log_message(self, fmt, *args):
         pass
@@ -320,6 +367,8 @@ class App(BaseHTTPRequestHandler):
                 return self._send(landing())
             if parts == ["start"]:
                 return self._send(start_form())
+            if parts == ["login"]:
+                return self._send(company_login(q.get("msg", "")))
             if parts[0] == "admin":
                 if not self._is_admin():
                     return self._send(admin_login(q.get("msg", "")))
@@ -328,6 +377,8 @@ class App(BaseHTTPRequestHandler):
                 slug = unquote(parts[1])
                 if parts[0] == "client":  # legacy URLs
                     return self._redirect("/company/" + "/".join(parts[1:]))
+                if not self._may_access(slug):
+                    return self._redirect("/login?msg=" + quote("Please sign in to access your workspace."))
                 if len(parts) == 2:
                     return self._send(page_company(slug, q.get("msg", ""), q.get("err") == "1"))
                 if parts[2] == "questionnaire":
@@ -352,22 +403,50 @@ class App(BaseHTTPRequestHandler):
 
             if parts == ["start"]:
                 name = form.get("name", "").strip()
+                email = form.get("email", "").strip().lower()
+                password = form.get("password", "")
                 if not name:
                     return self._send(start_form("Company name is required."))
+                if not email or "@" not in email:
+                    return self._send(start_form("A valid work email is required — it becomes your sign-in ID."))
+                if len(password) < 10:
+                    return self._send(start_form("Password must be at least 10 characters."))
+                if find_company_by_email(email):
+                    return self._send(start_form("That email is already registered — use Company sign-in instead."))
                 sites = [s.strip() for s in form.get("sites", "").split(",") if s.strip()]
                 slug = init_client(name, sites)
                 cfg = load_client(slug)
                 cfg["contact"] = form.get("contact", "").strip()
+                if not cfg.get("auth"):  # never overwrite an existing company's login
+                    set_company_auth(cfg, email, password)
                 if form.get("consent") == "1" and sites:
                     cfg["scanConsent"] = {"granted": True,
                                           "grantedBy": cfg["contact"] or "authorised at onboarding",
                                           "date": date.today().isoformat(),
                                           "note": "Authorised during onboarding — keep the written record on file."}
                 save_json(client_dir(slug) / "client.json", cfg)
-                welcome = "Workspace created. " + (
+                token = secrets.token_urlsafe(24)
+                _co_sessions[token] = slug
+                welcome = "Workspace created — you are signed in. " + (
                     "Run your first assessment when ready." if cfg["scanConsent"].get("granted")
                     else "Record scan consent below when your organisation is ready, or start with the questionnaire.")
-                return self._redirect(f"/company/{slug}?msg=" + quote(welcome))
+                return self._redirect(f"/company/{slug}?msg=" + quote(welcome),
+                                      cookie=f"dpdpa_co={token}; HttpOnly; SameSite=Lax; Path=/")
+
+            if parts == ["login"]:
+                cfg = find_company_by_email(form.get("email", ""))
+                auth = (cfg or {}).get("auth", {})
+                if cfg and auth and hmac.compare_digest(
+                        hash_password(form.get("password", ""), auth["salt"]), auth["hash"]):
+                    token = secrets.token_urlsafe(24)
+                    _co_sessions[token] = cfg["slug"]
+                    return self._redirect(f"/company/{cfg['slug']}",
+                                          cookie=f"dpdpa_co={token}; HttpOnly; SameSite=Lax; Path=/")
+                return self._send(company_login("Email or password incorrect."))
+
+            if parts == ["logout"]:
+                _co_sessions.pop(self._cookie("dpdpa_co") or "", None)
+                return self._redirect("/", cookie="dpdpa_co=; Max-Age=0; Path=/")
 
             if parts == ["admin", "login"]:
                 pw = os.environ.get("DPDPA_ADMIN_PASSWORD", "dpdpa-admin")
@@ -385,6 +464,25 @@ class App(BaseHTTPRequestHandler):
                         _sessions.discard(v)
                 return self._redirect("/", cookie="dpdpa_session=; Max-Age=0; Path=/")
 
+            if parts == ["admin", "reset"]:
+                if not self._is_admin():
+                    return self._redirect("/admin")
+                slug = form.get("slug", "")
+                email = form.get("email", "").strip().lower()
+                if not email or "@" not in email:
+                    return self._redirect("/admin?msg=" + quote("A valid client email is needed to set the login."))
+                other = find_company_by_email(email)
+                if other and other["slug"] != slug:
+                    return self._redirect("/admin?msg=" + quote(f"That email already belongs to {other['name']}."))
+                cfg = load_client(slug)
+                temp = "Tmp-" + secrets.token_urlsafe(9)
+                set_company_auth(cfg, email, temp)
+                save_json(client_dir(slug) / "client.json", cfg)
+                return self._redirect("/admin?msg=" + quote(
+                    f"Login for {cfg['name']} set to {email}. One-time temporary password: {temp} — "
+                    f"share it with the client through a secure channel and ask them to change it "
+                    f"from their workspace (Account section) after signing in."))
+
             if parts == ["clients"]:  # admin quick-add
                 if not self._is_admin():
                     return self._redirect("/admin")
@@ -397,6 +495,8 @@ class App(BaseHTTPRequestHandler):
 
             if len(parts) == 3 and parts[0] == "company":
                 slug, action = unquote(parts[1]), parts[2]
+                if not self._may_access(slug):
+                    return self._redirect("/login?msg=" + quote("Please sign in to access your workspace."))
                 cfg = load_client(slug)
 
                 if action == "consent":
@@ -415,6 +515,18 @@ class App(BaseHTTPRequestHandler):
                         skip_web = True
                     _start_scan(slug, skip_web)
                     return self._redirect(f"/company/{slug}")
+
+                if action == "password":
+                    auth = cfg.get("auth", {})
+                    if not auth:
+                        return self._redirect(f"/company/{slug}?err=1&msg=" + quote("No login exists for this workspace yet — ask the administrator to create one."))
+                    if not hmac.compare_digest(hash_password(form.get("current", ""), auth["salt"]), auth["hash"]):
+                        return self._redirect(f"/company/{slug}?err=1&msg=" + quote("Current password is incorrect."))
+                    if len(form.get("new", "")) < 10:
+                        return self._redirect(f"/company/{slug}?err=1&msg=" + quote("New password must be at least 10 characters."))
+                    set_company_auth(cfg, auth["email"], form["new"])
+                    save_json(client_dir(slug) / "client.json", cfg)
+                    return self._redirect(f"/company/{slug}?msg=" + quote("Password changed."))
 
                 if action == "questionnaire":
                     path = client_dir(slug) / "questionnaire.json"
