@@ -17,7 +17,9 @@ from .report import STATUS_LABELS
 from .rulebook import load_rulebook
 from .workspace import REPO_ROOT, client_dir, list_snapshots, load_json
 
-BRAND = os.environ.get("DPDPA_REPORT_BRAND", "DPDPA Sentinel")
+from . import PRODUCT_NAME
+
+BRAND = os.environ.get("DPDPA_REPORT_BRAND", PRODUCT_NAME)
 TAGLINE = os.environ.get("DPDPA_REPORT_TAGLINE", "DPDPA Compliance Assessment")
 
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}

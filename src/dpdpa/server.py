@@ -89,15 +89,43 @@ def _start_scan(slug: str, skip_web: bool) -> None:
 
     def work():
         try:
+            prev = _latest_snapshot(slug)
+            prev_rb = prev.get("rulebookVersion") if prev else None
             snap = run_scan(slug, skip_web=skip_web)
             from .report import generate
             generate(slug, snap)
             from .diffalert import diff
-            diff(slug)
+            alerts = diff(slug).get("alerts", [])
             s = summarize(snap)
+
+            # Publish notification + email to the client
+            from . import notify as _n
+            cfg2 = load_client(slug)
+            email_to = cfg2.get("auth", {}).get("email", "")
+            date_str = snap["scanId"][:8]
+            date_fmt = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+            rb_changed = prev_rb and prev_rb != snap["rulebookVersion"]
+            body = (f"Your DPDPA compliance report dated {date_fmt} is now available in your "
+                    f"{PRODUCT_NAME} portal.\n\nCompliance score: {s['complianceScore']}%  "
+                    f"(gaps {s['counts']['GAP']}, partial {s['counts']['PARTIAL']}, "
+                    f"to confirm {s['counts']['TBC']}).\n")
+            if rb_changed:
+                body += (f"\nThis assessment reflects an updated rulebook (v{snap['rulebookVersion']}) "
+                         f"following changes to the DPDP framework.\n")
+            regressions = [a for a in alerts if a["type"] == "REGRESSION"]
+            if regressions:
+                body += f"\n{len(regressions)} checkpoint(s) regressed since your last report — see the change alerts.\n"
+            body += f"\nSign in: {_n.base_url()}/login\n"
+            _n.notify(slug, "REPORT READY",
+                      f"New report dated {date_fmt}" + (" (updated for new rules)" if rb_changed else ""),
+                      body, email_to=email_to)
+            cfg2["lastPublishedAt"] = snap["scanId"]
+            save_json(client_dir(slug) / "client.json", cfg2)
+
             with _jobs_lock:
                 _jobs[slug] = {"state": "done",
-                               "detail": f"Scan complete — compliance score {s['complianceScore']}%"}
+                               "detail": f"Assessment complete — score {s['complianceScore']}% · client notified"
+                                         + (" (email sent)" if _n.smtp_configured() and email_to else " (email simulated)")}
         except Exception as ex:
             with _jobs_lock:
                 _jobs[slug] = {"state": "error", "detail": f"{type(ex).__name__}: {ex}"}
@@ -252,13 +280,33 @@ def page_company(slug: str, msg: str = "", is_err: bool = False, is_admin: bool 
                            f'and any access you granted with your engagement team, who run the assessment for you.</p></div>')
 
         reports_zone = (f"<h2>Your report</h2>{_report_tiles(slug, snap)}"
-                        f'<p class="small">Latest {e(snap["scanId"])} · rulebook v{e(snap["rulebookVersion"])}</p>'
+                        f'<p class="small">Latest {e(_fmt_date(snap["scanId"]))} · rulebook v{e(snap["rulebookVersion"])} · '
+                        f'<a href="/company/{slug}/history">all reports &amp; history →</a></p>'
                         if snap else
                         "<h2>Your report</h2><p class='small'>Your report appears here once your assessment team has prepared it.</p>")
+
+        from . import notify as _n
+        notes = _n.list_notifications(slug)
+        unread = sum(1 for x in notes if not x.get("read"))
+        if notes:
+            note_rows = "".join(
+                f'<div style="padding:8px 0;border-bottom:1px solid var(--line)">'
+                f'<b>{"🔵 " if not x.get("read") else ""}{e(x["title"])}</b> '
+                f'<span class="small">{e(x["createdAt"][:10])}</span><br>'
+                f'<span class="small" style="white-space:pre-wrap">{e(x["body"][:280])}</span></div>'
+                for x in notes[:6])
+            notif_panel = f"""<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<h3 style="margin:0">🔔 Notifications {f'<span class="badge" style="background:var(--bad)">{unread} new</span>' if unread else ''}</h3>
+{f'<form method="post" action="/company/{slug}/notifications/read"><button class="btn sm gray" type="submit">Mark all read</button></form>' if unread else ''}
+</div>{note_rows}</div>"""
+        else:
+            notif_panel = ""
 
         body = f"""{header}<div class="wrap">
 {f'<div class="msg {"err" if is_err else ""}">{e(unquote(msg))}</div>' if msg else ''}
 {job_note}
+{notif_panel}
 <h2>Complete your assessment inputs</h2>
 <p class="small" style="max-width:760px">Three inputs drive your DPDPA assessment. Fill what applies, then submit —
 everything is consent-based and you can update or withdraw anytime.</p>
@@ -291,8 +339,8 @@ each access grant carries its own consent. We identify gaps — we never change 
 
     # ================= ADMIN (operator) VIEW — full controls =================
     results = (_report_tiles(slug, snap) +
-               f'<p class="small">Scans on file: {len(list_snapshots(slug))} · latest {e(snap["scanId"])} '
-               f'· rulebook v{e(snap["rulebookVersion"])}</p>' if snap else
+               f'<p class="small">Scans on file: {len(list_snapshots(slug))} · latest {e(_fmt_date(snap["scanId"]))} '
+               f'· rulebook v{e(snap["rulebookVersion"])} · <a href="/company/{slug}/history">history &amp; compare →</a></p>' if snap else
                "<p class='small'>No assessment has run yet.</p>")
     if running:
         scan_zone = running_note
@@ -347,6 +395,60 @@ full controls. The client sees only their inputs and report.</div>
 <p style="margin:26px 0"><a href="/admin" class="small">← operations dashboard</a></p>
 </div>"""
     return layout(cfg["name"], body, refresh=4 if running else None)
+
+
+def _load_snapshot_by_id(slug: str, scan_id: str) -> dict | None:
+    for p in list_snapshots(slug):
+        if p.stem == scan_id:
+            return load_json(p)
+    return None
+
+
+def _fmt_date(scan_id: str) -> str:
+    return f"{scan_id[:4]}-{scan_id[4:6]}-{scan_id[6:8]} {scan_id[9:11]}:{scan_id[11:13]} UTC" if len(scan_id) >= 13 else scan_id
+
+
+def page_history(slug: str, msg: str = "") -> bytes:
+    cfg = load_client(slug)
+    snaps = [load_json(p) for p in list_snapshots(slug)]
+    snaps.reverse()  # newest first
+    rows = []
+    for sn in snaps:
+        s = summarize(sn)
+        sid = sn["scanId"]
+        rows.append(f"""<tr>
+<td><b>{e(_fmt_date(sid))}</b><div class="small">{e(sid)}</div></td>
+<td><b style="color:{_score_color(s['complianceScore'])}">{s['complianceScore']}%</b></td>
+<td class="small">gaps {s['counts']['GAP']} · partial {s['counts']['PARTIAL']} · TBC {s['counts']['TBC']}</td>
+<td class="small">v{e(sn['rulebookVersion'])}</td>
+<td><a class="btn sm" href="/company/{slug}/history/{sid}/client" target="_blank">📕 Report</a>
+<a class="btn sm gray" href="/company/{slug}/history/{sid}/phase2" target="_blank">Phase 2</a>
+<a class="btn sm gray" href="/company/{slug}/history/{sid}/phase1" target="_blank">Phase 1</a></td></tr>""")
+
+    opts = "".join(f'<option value="{e(sn["scanId"])}">{e(_fmt_date(sn["scanId"]))} · {summarize(sn)["complianceScore"]}%</option>'
+                   for sn in snaps)
+    compare = f"""
+<h2>Compare two reports</h2>
+<div class="card"><form method="get" action="/company/{slug}/compare">
+<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:end">
+<div style="flex:1;min-width:200px"><label>Report A (baseline)</label><select name="a">{opts}</select></div>
+<div style="flex:1;min-width:200px"><label>Report B (compare to)</label><select name="b">{opts}</select></div>
+<button class="btn" type="submit">Compare →</button></div>
+<p class="small" style="margin-top:8px">Shows score change, what improved, what regressed, and any new checkpoints from a rulebook update.</p>
+</form></div>""" if len(snaps) >= 2 else '<p class="small">Run at least two assessments to enable comparison.</p>'
+
+    body = f"""
+<section><div class="wrap">
+<p class="small"><a href="/company/{slug}">← {e(cfg['name'])}</a></p>
+<h2>Assessment history — {e(cfg['name'])}</h2>
+<p class="small">Every assessment is retained with its date and can be reopened. Reports render from the
+immutable snapshot taken at that time.</p>
+{f'<div class="msg">{e(unquote(msg))}</div>' if msg else ''}
+<table><tr><th>Date</th><th>Score</th><th>Breakdown</th><th>Rulebook</th><th>Reports</th></tr>
+{''.join(rows) or '<tr><td colspan=5 class="small">No assessments yet.</td></tr>'}</table>
+{compare}
+</div></section>"""
+    return layout("History", body)
 
 
 def page_questionnaire(slug: str) -> bytes:
@@ -525,6 +627,78 @@ For production, move them to a managed secrets vault — see docs/DOTNET-IMPLEME
     return layout("Connectors", body)
 
 
+def page_rulebook(msg: str = "", is_err: bool = False) -> bytes:
+    from .rulebook import all_rulebooks, IMPORT_DIR
+    books = all_rulebooks()
+    current = books[-1]
+    rows = "".join(
+        f"<tr><td><b>v{e(rb['rulebookVersion'])}</b>{' · current' if rb is current else ''}</td>"
+        f"<td>{len(rb['controls'])}</td><td>{len(rb['categories'])}</td>"
+        f"<td class='small'>{e(rb.get('lastUpdated',''))}</td>"
+        f"<td class='small'>{'imported' if (IMPORT_DIR / ('dpdpa-rulebook.v'+rb['rulebookVersion']+'.json')).exists() else 'shipped'}</td></tr>"
+        for rb in reversed(books))
+    body = f"""
+<section><div class="wrap" style="max-width:860px">
+<p class="small"><a href="/admin">← operations dashboard</a></p>
+<h2>Rulebook — the law, as data <span class="small">(CS / Legal)</span></h2>
+<p class="small">The rulebook is the checkpoint universe. When MeitY updates the DPDP framework, import a new
+version here. Existing assessments are untouched; the next assessment a company runs uses the latest version,
+and the diff highlights any newly-introduced checkpoints. Nothing changes silently.</p>
+{f'<div class="msg {"err" if is_err else ""}">{e(unquote(msg))}</div>' if msg else ''}
+<table><tr><th>Version</th><th>Controls</th><th>Categories</th><th>Updated</th><th>Source</th></tr>{rows}</table>
+
+<h2>Append new checkpoints</h2>
+<div class="card"><p style="font-size:14px">Paste one or more new control objects (a JSON array). They are appended
+to the current rulebook (v{e(current['rulebookVersion'])}) as a new version. Use this when the regulator adds
+requirements. Each control needs at least <code>id, category, severity, title, checkMethod</code>.</p>
+<form method="post" action="/admin/rulebook/append">
+<label>New version number</label>
+<input type="text" name="version" placeholder="e.g. {_bump(current['rulebookVersion'])}" value="{_bump(current['rulebookVersion'])}">
+<label>New controls (JSON array)</label>
+<textarea name="controls" rows="7" placeholder='[{{"id":"NT-07","category":"NT","severity":"medium","title":"...","legalRef":"...","description":"...","checkMethod":"questionnaire","remediation":"...","appAssist":{{"possible":true,"how":"..."}}}}]'></textarea>
+<label>Note (what changed &amp; why)</label>
+<input type="text" name="note" placeholder="e.g. Appended per MeitY notification dated ...">
+<p><button class="btn green" type="submit">Append &amp; publish new version</button></p></form></div>
+
+<h2>Import a full rulebook</h2>
+<div class="card"><p style="font-size:14px">Alternatively paste a complete rulebook JSON (with a higher
+<code>rulebookVersion</code>) prepared by counsel. It is validated and stored.</p>
+<form method="post" action="/admin/rulebook/import">
+<textarea name="rulebook" rows="6" placeholder='{{"rulebookVersion":"5.0.0","categories":[...],"controls":[...]}}'></textarea>
+<p><button class="btn" type="submit">Validate &amp; import</button></p></form></div>
+<p class="small">Imported rulebooks are stored in the data volume (<code>local/_rulebooks/</code>) and persist
+across rebuilds. After importing, re-run a company's assessment to apply it — the client is notified their
+report reflects the updated law.</p>
+</div></section>"""
+    return layout("Rulebook", body, admin=True)
+
+
+def _bump(version: str) -> str:
+    parts = version.split(".")
+    try:
+        return f"{int(parts[0]) + 1}.0.0"
+    except (ValueError, IndexError):
+        return "5.0.0"
+
+
+def page_outbox() -> bytes:
+    from . import notify as _n
+    rows = "".join(
+        f"<tr><td class='small'>{e(x.get('sentAt','')[:16])}</td><td>{e(x.get('slug',''))}</td>"
+        f"<td>{e(x.get('to',''))}</td><td class='small'>{e(x.get('subject',''))}</td>"
+        f"<td>{e(x.get('status',''))}</td></tr>" for x in _n.outbox()[:100])
+    mode = "LIVE (SMTP configured)" if _n.smtp_configured() else "SIMULATED (set TRACKVAULT_SMTP_* to send real email)"
+    body = f"""
+<section><div class="wrap">
+<p class="small"><a href="/admin">← operations dashboard</a></p>
+<h2>Notification delivery log</h2>
+<p class="small">Email mode: <b>{e(mode)}</b>. Every client notification is recorded here with its delivery status.</p>
+<table><tr><th>Sent</th><th>Company</th><th>To</th><th>Subject</th><th>Status</th></tr>
+{rows or '<tr><td colspan=5 class="small">No notifications sent yet.</td></tr>'}</table>
+</div></section>"""
+    return layout("Delivery log", body, admin=True)
+
+
 def page_admin(msg: str = "") -> bytes:
     rows = []
     for cfg in _clients():
@@ -559,6 +733,8 @@ def page_admin(msg: str = "") -> bytes:
 <section><div class="wrap">
 {f'<div class="msg">{e(unquote(msg))}</div>' if msg else ''}
 <h2>Operations dashboard <span class="small">· all engagements</span></h2>
+<p><a class="btn sm" href="/admin/rulebook">⚖ Rulebook (CS / Legal)</a>
+<a class="btn sm gray" href="/admin/outbox">📧 Notification delivery log</a></p>
 <table><tr><th>Company</th><th>Sites</th><th>Consent</th><th>Latest result</th><th></th></tr>
 {''.join(rows) or '<tr><td colspan="5">No companies yet.</td></tr>'}</table>
 <div class="card"><h3 style="margin-top:0">Add a company (admin quick-add)</h3>
@@ -644,6 +820,10 @@ class App(BaseHTTPRequestHandler):
             if parts[0] == "admin":
                 if not self._is_admin():
                     return self._send(admin_login(q.get("msg", "")))
+                if parts == ["admin", "rulebook"]:
+                    return self._send(page_rulebook(q.get("msg", ""), q.get("err") == "1"))
+                if parts == ["admin", "outbox"]:
+                    return self._send(page_outbox())
                 return self._send(page_admin(q.get("msg", "")))
             if parts[0] in ("company", "client") and len(parts) >= 2:
                 slug = unquote(parts[1])
@@ -658,6 +838,28 @@ class App(BaseHTTPRequestHandler):
                     return self._send(page_questionnaire(slug))
                 if parts[2] == "connectors":
                     return self._send(page_connectors(slug, q.get("msg", ""), q.get("err") == "1"))
+                if parts[2] == "history" and len(parts) == 2 + 1:
+                    return self._send(page_history(slug, q.get("msg", "")))
+                if parts[2] == "history" and len(parts) == 5:
+                    sid, which = parts[3], parts[4]
+                    sn = _load_snapshot_by_id(slug, sid)
+                    if not sn:
+                        return self._send(layout("Not found", "<section><div class='wrap'><p>Assessment not found.</p></div></section>"), code=404)
+                    from .report import phase1_html, phase2_html
+                    from . import report_premium
+                    if which == "phase1":
+                        return self._send(phase1_html(sn).encode("utf-8"))
+                    if which == "phase2":
+                        return self._send(phase2_html(sn).encode("utf-8"))
+                    if which == "client":
+                        return self._send(report_premium.build(sn).encode("utf-8"))
+                if parts[2] == "compare":
+                    a = _load_snapshot_by_id(slug, q.get("a", ""))
+                    b = _load_snapshot_by_id(slug, q.get("b", ""))
+                    if not a or not b:
+                        return self._redirect(f"/company/{slug}/history?msg=" + quote("Pick two valid reports to compare."))
+                    from .report import compare_html
+                    return self._send(compare_html(slug, a, b).encode("utf-8"))
                 if parts[2] == "report" and len(parts) == 4 and "/" not in parts[3] and "\\" not in parts[3]:
                     f = client_dir(slug) / "reports" / parts[3]
                     if f.is_file() and f.suffix in (".html", ".json"):
@@ -758,6 +960,50 @@ class App(BaseHTTPRequestHandler):
                     f"share it with the client through a secure channel and ask them to change it "
                     f"from their workspace (Account section) after signing in."))
 
+            if parts[:2] == ["admin", "rulebook"] and len(parts) == 3:
+                if not self._is_admin():
+                    return self._redirect("/admin")
+                from .rulebook import load_rulebook, IMPORT_DIR
+                from .workspace import save_json as _sj
+                action = parts[2]
+                try:
+                    if action == "append":
+                        version = form.get("version", "").strip()
+                        new_controls = json.loads(form.get("controls", "").strip() or "[]")
+                        if not isinstance(new_controls, list) or not new_controls:
+                            raise ValueError("controls must be a non-empty JSON array")
+                        for c in new_controls:
+                            for req in ("id", "category", "severity", "title", "checkMethod"):
+                                if req not in c:
+                                    raise ValueError(f"a control is missing required field '{req}'")
+                        rb = json.loads(json.dumps(load_rulebook()))  # deep copy of current
+                        existing_ids = {c["id"] for c in rb["controls"]}
+                        dupes = [c["id"] for c in new_controls if c["id"] in existing_ids]
+                        if dupes:
+                            raise ValueError(f"control id(s) already exist: {dupes}")
+                        if not version or version in {b["rulebookVersion"] for b in __import__('dpdpa.rulebook', fromlist=['all_rulebooks']).all_rulebooks()}:
+                            raise ValueError("provide a new, unused version number")
+                        rb["rulebookVersion"] = version
+                        rb["lastUpdated"] = date.today().isoformat()
+                        rb["updateNote"] = form.get("note", "").strip() or f"Appended {len(new_controls)} control(s)."
+                        rb["controls"].extend(new_controls)
+                        IMPORT_DIR.mkdir(parents=True, exist_ok=True)
+                        _sj(IMPORT_DIR / f"dpdpa-rulebook.v{version}.json", rb)
+                        return self._redirect("/admin/rulebook?msg=" + quote(
+                            f"Published rulebook v{version} with {len(new_controls)} new checkpoint(s). "
+                            "Re-run a company's assessment to apply it."))
+                    if action == "import":
+                        rb = json.loads(form.get("rulebook", "").strip() or "{}")
+                        if not rb.get("rulebookVersion") or not isinstance(rb.get("controls"), list) or not rb["controls"]:
+                            raise ValueError("rulebook must have rulebookVersion and a non-empty controls array")
+                        rb.setdefault("categories", [])
+                        IMPORT_DIR.mkdir(parents=True, exist_ok=True)
+                        _sj(IMPORT_DIR / f"dpdpa-rulebook.v{rb['rulebookVersion']}.json", rb)
+                        return self._redirect("/admin/rulebook?msg=" + quote(
+                            f"Imported rulebook v{rb['rulebookVersion']} ({len(rb['controls'])} controls)."))
+                except (json.JSONDecodeError, ValueError) as ex:
+                    return self._redirect("/admin/rulebook?err=1&msg=" + quote(f"Import failed: {ex}"))
+
             if parts == ["clients"]:  # admin quick-add
                 if not self._is_admin():
                     return self._redirect("/admin")
@@ -766,6 +1012,14 @@ class App(BaseHTTPRequestHandler):
                     return self._redirect("/admin?msg=" + quote("Company name is required"))
                 sites = [s.strip() for s in form.get("sites", "").split(",") if s.strip()]
                 slug = init_client(name, sites)
+                return self._redirect(f"/company/{slug}")
+
+            if len(parts) == 4 and parts[0] == "company" and parts[2] == "notifications" and parts[3] == "read":
+                slug = unquote(parts[1])
+                if not self._may_access(slug):
+                    return self._redirect("/login")
+                from . import notify as _n
+                _n.mark_all_read(slug)
                 return self._redirect(f"/company/{slug}")
 
             if len(parts) >= 4 and parts[0] == "company" and parts[2] == "connectors":

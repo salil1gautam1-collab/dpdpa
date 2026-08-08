@@ -5,6 +5,8 @@
 # scan. See docs/DATA-PROTECTION-POLICY.md.
 # ============================================================
 local/
+_outbox.json
+_rulebooks/
 *.client.json
 *.evidence.json
 # Cloud/infra credentials — never commit, even if a workspace escapes local/

@@ -102,7 +102,7 @@ def layout(title: str, body: str, refresh: int | None = None, admin: bool = Fals
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">{meta}
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{e(title)} — {PRODUCT_NAME}</title><style>{CSS}</style></head><body>
-<nav><div class="wrap"><span class="brand"><a href="/">🛡 {PRODUCT_NAME}</a></span>
+<nav><div class="wrap"><span class="brand"><a href="/">🔐 {PRODUCT_NAME}</a></span>
 <span><a href="/#how">How it works</a><a href="/start">Start assessment</a><a href="/login">Company sign-in</a>{admin_link}</span></div></nav>
 {body}
 <footer><div class="wrap">© 2026 {PRODUCT_NAME} v{__version__} · Compliance intelligence for the Digital Personal

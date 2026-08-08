@@ -1,4 +1,6 @@
-"""DPDPA Sentinel — compliance scanning and gap assessment for India's DPDPA 2023 + DPDP Rules 2025."""
+"""TrackVault — DPDPA compliance scanning and gap assessment for India's DPDPA 2023 + DPDP Rules 2025."""
 
-__version__ = "0.1.0"
-PRODUCT_NAME = "DPDPA Sentinel"
+import os
+
+__version__ = "0.2.0"
+PRODUCT_NAME = os.environ.get("TRACKVAULT_BRAND", "TrackVault")
