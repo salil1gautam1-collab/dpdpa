@@ -28,7 +28,9 @@ def _next_id(items: list) -> int:
 
 
 def smtp_configured() -> bool:
-    return bool(os.environ.get("TRACKVAULT_SMTP_HOST"))
+    # Require host AND password so pre-filled host/user stay in simulated mode
+    # until the operator adds the secret.
+    return bool(os.environ.get("TRACKVAULT_SMTP_HOST") and os.environ.get("TRACKVAULT_SMTP_PASS"))
 
 
 def _send_email(to: str, subject: str, body: str) -> str:
