@@ -1,0 +1,10 @@
+services:
+  dpdpa:
+    build: .
+    container_name: dpdpa-sentinel
+    # Publish to localhost only — the prototype has no authentication.
+    ports:
+      - "127.0.0.1:8377:8377"
+    volumes:
+      - ./local:/app/local
+    restart: unless-stopped

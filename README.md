@@ -25,28 +25,37 @@ a previously-compliant point regresses or a new gap appears.
 > access and permissions. Final legal interpretation rests with the
 > organisation's own counsel / company secretary.
 
-## Quick start
+## Quick start — the app
 
-Requires Python 3.10+ (no third-party packages — standard library only).
+**Docker (recommended):**
 
 ```bash
-# 1. Initialise a client workspace (kept in local/, never committed)
-python -m dpdpa init --client "Acme Ltd" --site https://www.acme.example
-
-# 2. Run a scan (website checks + any questionnaire answers present)
-python -m dpdpa scan --client acme-ltd
-
-# 3. Generate reports (Phase 1 + Phase 2, HTML + JSON)
-python -m dpdpa report --client acme-ltd
-
-# 4. Serve the dashboard locally
-python -m dpdpa serve --client acme-ltd
-
-# 5. Compare the two most recent scans and print alerts
-python -m dpdpa diff --client acme-ltd
+docker compose up -d
 ```
 
-Run from the `src/` directory or set `PYTHONPATH=src`.
+Open http://127.0.0.1:8377/ — add companies, record scan consent, fill the
+questionnaire in the browser, press **Run scan**, open the Phase 1/2 reports.
+Client data persists in `./local` on the host (volume mount), never in the image.
+
+**Without Docker** (Python 3.10+, no third-party packages):
+
+```bash
+cd src
+python -m dpdpa demo    # optional: seed two dummy companies
+python -m dpdpa serve   # app at http://127.0.0.1:8377/
+```
+
+**CLI (same engine, scriptable / schedulable):**
+
+```bash
+python -m dpdpa init --client "Acme Ltd" --site https://www.acme.example
+python -m dpdpa scan --client acme-ltd        # add --skip-web for questionnaire-only
+python -m dpdpa report --client acme-ltd      # Phase 1 + Phase 2, HTML + JSON
+python -m dpdpa diff --client acme-ltd        # alerts vs previous scan
+python -m dpdpa retention --client acme-ltd   # apply the retention schedule
+```
+
+Run CLI commands from the `src/` directory or set `PYTHONPATH=src`.
 
 ## Repository layout
 

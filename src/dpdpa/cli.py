@@ -29,16 +29,20 @@ def main(argv=None):
     p.add_argument("--client", required=True)
     p.add_argument("--site", action="append", default=[], help="repeatable")
 
-    for name in ("scan", "report", "diff", "serve", "retention"):
+    for name in ("scan", "report", "diff", "retention"):
         p = sub.add_parser(name)
         p.add_argument("--client", required=True)
         if name == "scan":
             p.add_argument("--skip-web", action="store_true", help="questionnaire-only scan")
-        if name == "serve":
-            p.add_argument("--port", type=int, default=8377)
         if name == "retention":
             p.add_argument("--apply", action="store_true")
             p.add_argument("--months", type=int, default=24)
+
+    p = sub.add_parser("serve", help="run the web app (all companies)")
+    p.add_argument("--port", type=int, default=8377)
+    p.add_argument("--host", default="127.0.0.1", help="0.0.0.0 inside Docker")
+
+    sub.add_parser("demo", help="seed two dummy companies with sample answers")
 
     p = sub.add_parser("controls", help="list rulebook checkpoints")
     p.add_argument("--category", default=None)
@@ -76,7 +80,42 @@ def main(argv=None):
 
     elif args.cmd == "serve":
         from .server import serve
-        serve(args.client, args.port)
+        serve(None, args.port, args.host)
+
+    elif args.cmd == "demo":
+        from .workspace import save_json
+        from .engine import run_scan
+        from .report import generate
+        demos = {
+            "Demo Manufacturing Co (dummy)": [
+                ("NT-01", "GAP", "No privacy notice published on factory-outlet site."),
+                ("CN-01", "GAP", "Single generic consent line on enquiry form."),
+                ("SEC-01", "PARTIAL", "Antivirus and firewall in place; no documented safeguards policy."),
+                ("RET-01", "GAP", "No retention schedule; ERP keeps records indefinitely."),
+                ("PR-01", "PARTIAL", "DPA signed with cloud vendor; none with transporter or job-work partners."),
+                ("BR-01", "GAP", "No incident-response plan."),
+                ("CH-01", "NA", "Industrial B2B only, corporate onboarding, no consumer sign-up."),
+                ("DR-01", "GAP", "No published channel for data principal requests."),
+            ],
+            "Acme Exports Pvt Ltd (dummy)": [
+                ("NT-01", "COMPLIANT", "Privacy notice published and linked site-wide (verified by counsel)."),
+                ("CN-02", "PARTIAL", "Consent checkbox on contact form; missing on newsletter form."),
+                ("SEC-04", "GAP", "Web-server logs rotate after 30 days — Rule 6 needs one year."),
+                ("XB-01", "PARTIAL", "Transfers to overseas buyers recorded in CRM; no formal register."),
+                ("RET-01", "PARTIAL", "Retention schedule drafted, not yet approved."),
+                ("BR-02", "GAP", "No Board/data-principal notification templates."),
+                ("GOV-01", "COMPLIANT", "Grievance contact published in footer and notice."),
+            ],
+        }
+        for name, rows in demos.items():
+            slug = init_client(name, [])
+            save_json(client_dir(slug) / "questionnaire.json", {"assertions": [
+                {"controlId": cid, "status": st, "evidence": ev,
+                 "source": {"department": "Demo", "respondent": "seed data", "date": "2026-08-08"}}
+                for cid, st, ev in rows]})
+            snap = run_scan(slug, skip_web=True)
+            generate(slug, snap)
+            print(f"seeded {name} -> local/{slug}/")
 
     elif args.cmd == "retention":
         cutoff = datetime.now(timezone.utc) - timedelta(days=30 * args.months)
