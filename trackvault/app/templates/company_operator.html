@@ -28,24 +28,39 @@
 {% endif %}
 
 <h2>Run assessment</h2>
+<div class="card">
+  <p class="small" style="margin-top:0"><b>A full assessment evaluates everything you've set up:</b></p>
+  <ul class="small" style="margin:6px 0 0;padding-left:18px;line-height:1.9">
+    <li>🌐 <b>Website</b> —
+      {% if c.sites and c.scan_consent and c.scan_consent.granted %}<span style="color:var(--ok)">will scan</span> {{ c.sites|join(', ') }}
+      {% elif c.sites %}<span style="color:var(--warn)">sites listed, but website scan not authorised yet</span>
+      {% else %}not applicable (no websites listed){% endif %}</li>
+    <li>🔑 <b>Infrastructure &amp; cloud connectors</b> —
+      {% if connected %}<span style="color:var(--ok)">will run: {{ connected|join(' · ') }}</span>
+      {% else %}<span>none connected — <a href="/companies/{{ c.id }}/connectors">add connectors</a> to include AWS / Azure / Google Cloud / endpoints / AD / firewall</span>{% endif %}</li>
+    <li>📋 <b>Questionnaire</b> — {{ answered }}/{{ total }} checkpoints answered</li>
+  </ul>
+</div>
 <div class="rowbtns">
   {% if user.role.value in ['admin','analyst'] %}
+  <form method="post" action="/companies/{{ c.id }}/scan" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn green" {{ 'disabled' if c.sites and not (c.scan_consent and c.scan_consent.granted) }}>▶ Run full assessment</button>
+  </form>
   {% if c.sites %}
   <form method="post" action="/companies/{{ c.id }}/scan" class="inline">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button class="btn green" {{ 'disabled' if not (c.scan_consent and c.scan_consent.granted) }}>▶ Run full assessment</button>
+    <input type="hidden" name="skip_web" value="1">
+    <button class="btn gray" title="Runs connectors + questionnaire, skips only the public website crawl">Run without website scan</button>
   </form>
   {% endif %}
-  <form method="post" action="/companies/{{ c.id }}/scan" class="inline">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <input type="hidden" name="skip_web" value="1">
-    <button class="btn gray">Run questionnaire-only</button>
-  </form>
   {% endif %}
   <a class="btn" href="/companies/{{ c.id }}/questionnaire">✎ Questionnaire ({{ answered }}/{{ total }})</a>
   <a class="btn" href="/companies/{{ c.id }}/connectors">🔑 Connectors</a>
   <a class="btn gray" href="/companies/{{ c.id }}/history">History &amp; compare</a>
 </div>
+<p class="small"><b>▶ Run full assessment</b> = website + all connected systems + questionnaire.
+<b>Run without website scan</b> does the same but skips only the public website crawl — your connectors still run.</p>
 
 <h2>Send &amp; import the questionnaire</h2>
 <div class="card" style="border-color:#0d6efd">
@@ -100,6 +115,7 @@ RET-01: partial: Retention schedule in draft"></textarea>
     <a class="btn sm gray" href="/companies/{{ c.id }}/history">Open history</a></div>
 </div>
 <p class="small">Latest {{ latest.scan_id }} · rulebook v{{ latest.rulebook_version }} · {{ snaps|length }} on file.</p>
+{% if last_run %}<p class="small">✅ <b>Last assessment covered:</b> {{ last_run|join(' · ') }}</p>{% endif %}
 {% else %}
 <p class="small">No assessment has run yet.</p>
 {% endif %}

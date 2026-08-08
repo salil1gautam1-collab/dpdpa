@@ -74,8 +74,21 @@ def company_detail(cid: str, request: Request, db: Session = Depends(get_db)):
     answered = len(list(db.execute(select(QuestionnaireAnswer).where(
         QuestionnaireAnswer.company_id == cid)).scalars()))
     rb = latest_rulebook(db)
+    _labels = {"aws": "☁️ AWS", "azure": "🔷 Azure", "intune": "💻 Intune/Defender",
+               "gcp": "🟡 Google Cloud", "adgpo": "🏢 AD/GPO", "firewall": "🧱 Firewall"}
+    connected = [_labels.get(k.provider, k.provider) for k in c.connectors
+                 if (k.consent or {}).get("granted") and k.secret_enc]
+    last_run = []
+    if latest:
+        m = (latest.data or {}).get("meta", {})
+        if m.get("pagesScanned"):
+            last_run.append(f"🌐 website ({len(m['pagesScanned'])} pages)")
+        for k, v in m.items():
+            if k.endswith("Connector") and v == "ran":
+                last_run.append(_labels.get(k[:-9], k[:-9]))
+        last_run.append("📋 questionnaire")
     return render(request, "company_operator.html", c=c, snaps=snaps, latest=latest,
-                  answered=answered, total=len(rb["controls"]))
+                  answered=answered, total=len(rb["controls"]), connected=connected, last_run=last_run)
 
 
 @router.post("/companies/{cid}/consent")
