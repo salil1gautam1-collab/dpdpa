@@ -115,7 +115,69 @@ def _score_color(score: float) -> str:
 
 # ----------------------------------------------------------------- pages ---
 
-def page_company(slug: str, msg: str = "", is_err: bool = False) -> bytes:
+SCAN_COOLDOWN_SECONDS = 900  # client-initiated assessments limited to 1 per 15 min
+
+
+def _seconds_since_last_scan(slug: str) -> float | None:
+    from datetime import datetime, timezone
+    snaps = list_snapshots(slug)
+    if not snaps:
+        return None
+    try:
+        ts = datetime.strptime(snaps[-1].stem, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - ts).total_seconds()
+    except ValueError:
+        return None
+
+
+def _report_tiles(slug: str, snap: dict) -> str:
+    return f"""
+<div class="grid c3" style="margin-top:6px">
+<div class="tile"><div class="ico">📄</div><h3>Phase 1 — Discovery</h3>
+<p>Your data footprint: pages, cookies, trackers, forms, questionnaire coverage.</p>
+<p style="margin-top:12px"><a class="btn sm" href="/company/{slug}/report/phase1-discovery.html">Open report</a></p></div>
+<div class="tile"><div class="ico">📊</div><h3>Phase 2 — Gap Assessment</h3>
+<p>Every checkpoint graded with severity, evidence and recommendations.</p>
+<p style="margin-top:12px"><a class="btn sm" href="/company/{slug}/report/phase2-gap-assessment.html">Open report</a></p></div>
+<div class="tile"><div class="ico">🧾</div><h3>Machine-readable</h3>
+<p>Summary JSON for your GRC tooling or board pack.</p>
+<p style="margin-top:12px"><a class="btn sm gray" href="/company/{slug}/report/summary.json">summary.json</a></p></div>
+</div>"""
+
+
+def _connector_summary_rows(slug: str, conns: dict, cmeta: dict, manage: bool) -> str:
+    link = (f' · <a href="/company/{slug}/connectors">manage</a>' if manage else "")
+    provide = (f' <a href="/company/{slug}/connectors">Provide access →</a>' if manage else
+               " <span class='small'>your administrator can add this</span>")
+
+    def row(key, id_field, icon, label, ready_desc, detail_fn):
+        c = conns.get(key, {})
+        if c.get("consent", {}).get("granted") and c.get(id_field):
+            return (f'<tr><td>{icon} {label}</td><td><b style="color:var(--ok)">Provided</b></td>'
+                    f'<td class="small">{detail_fn(cmeta)}{link}</td></tr>')
+        return (f'<tr><td>{icon} {label}</td><td><span style="color:var(--na)">Not provided</span></td>'
+                f'<td class="small">{ready_desc}{provide}</td></tr>')
+
+    return (
+        row("aws", "accessKeyId", "☁️", "Cloud posture — AWS",
+            "Read-only checks: S3, CloudTrail, security groups, RDS, IAM.",
+            lambda m: (f"Account {e(m.get('awsAccount'))} · {m.get('s3Buckets','?')} buckets read"
+                       if m.get('awsAccount') else "Access provided — awaiting next assessment.")) +
+        row("azure", "clientId", "🔷", "Cloud posture — Azure",
+            "Read-only checks: storage, NSG exposure, Defender score.",
+            lambda m: (f"{m.get('azureSubscriptions','?')} subscription(s) read"
+                       if 'azureSubscriptions' in m else "Access provided — awaiting next assessment.")) +
+        row("gcp", "projectId", "🟡", "Cloud posture — Google Cloud",
+            "Read-only checks: buckets, firewall, Cloud SQL SSL.",
+            lambda m: (f"{m.get('gcpBuckets','?')} buckets read"
+                       if 'gcpBuckets' in m else "Access provided — awaiting next assessment.")) +
+        row("intune", "clientId", "💻", "Endpoints &amp; antivirus (Intune/Defender)",
+            "Device counts, encryption &amp; AV-compliance coverage.",
+            lambda m: (f"{m.get('endpointDeviceCount','?')} managed devices read"
+                       if 'endpointDeviceCount' in m else "Access provided — awaiting next assessment.")))
+
+
+def page_company(slug: str, msg: str = "", is_err: bool = False, is_admin: bool = False) -> bytes:
     cfg = load_client(slug)
     snap = _latest_snapshot(slug)
     job = _job_state(slug)
@@ -125,17 +187,9 @@ def page_company(slug: str, msg: str = "", is_err: bool = False) -> bytes:
     q = load_json(client_dir(slug) / "questionnaire.json", {})
     n_answered = len(q.get("assertions", []))
     alerts = load_json(client_dir(slug) / "alerts.json", {})
-
-    # progress steps
-    def step(label, state):
-        return f'<span class="{state}">{label}</span>'
-    steps = [step("① Company details ✓", "done"),
-             step("② Scan consent " + ("✓" if consent.get("granted") else "— pending"),
-                  "done" if consent.get("granted") else ("now" if has_sites else "")),
-             step(f"③ Questionnaire — {n_answered}/57 answered",
-                  "done" if n_answered >= 40 else ("now" if n_answered else "")),
-             step("④ Scan " + ("✓" if snap else "— not yet run"), "done" if snap else "now"),
-             step("⑤ Reports " + ("✓" if snap else ""), "done" if snap else "")]
+    conns = load_json(client_dir(slug) / "connectors.json", {})
+    cmeta = (snap or {}).get("meta", {})
+    total_controls = len(load_rulebook()["controls"])
 
     if snap:
         s = summarize(snap)
@@ -143,120 +197,154 @@ def page_company(slug: str, msg: str = "", is_err: bool = False) -> bytes:
         chips = "".join(
             f'<span class="chip"><b style="color:{STATUS_COLORS[k]}">{v}</b>{k.title() if k != "NA" else "N/A"}</span>'
             for k, v in s["counts"].items())
-        head_right = f"""
-<div class="donut" style="--p:{score};--dc:{_score_color(score)}"><div>{score}%<small>compliance</small></div></div>"""
-        results = f"""
-<div class="grid c3" style="margin-top:6px">
-<div class="tile"><div class="ico">📄</div><h3>Phase 1 — Discovery</h3>
-<p>Your data footprint: pages, cookies, trackers, forms, questionnaire coverage.</p>
-<p style="margin-top:12px"><a class="btn sm" href="/company/{slug}/report/phase1-discovery.html">Open report</a></p></div>
-<div class="tile"><div class="ico">📊</div><h3>Phase 2 — Gap Assessment</h3>
-<p>All 57 checkpoints graded with severity, evidence and recommendations.</p>
-<p style="margin-top:12px"><a class="btn sm" href="/company/{slug}/report/phase2-gap-assessment.html">Open report</a></p></div>
-<div class="tile"><div class="ico">🧾</div><h3>Machine-readable</h3>
-<p>Summary JSON for your GRC tooling or board pack automation.</p>
-<p style="margin-top:12px"><a class="btn sm gray" href="/company/{slug}/report/summary.json">summary.json</a></p></div>
-</div>
-<p class="small">Scans on file: {len(list_snapshots(slug))} · latest {e(snap['scanId'])} · rulebook v{e(snap['rulebookVersion'])}</p>"""
+        head_right = (f'<div class="donut" style="--p:{score};--dc:{_score_color(score)}">'
+                      f'<div>{score}%<small>compliance</small></div></div>')
     else:
-        head_right = '<div class="donut" style="--p:0;--dc:var(--na)"><div>—<small>no scan yet</small></div></div>'
+        head_right = '<div class="donut" style="--p:0;--dc:var(--na)"><div>—<small>no report yet</small></div></div>'
         chips = ""
-        results = "<p class='small'>Run your first scan to generate reports.</p>"
 
+    job_note = (f'<div class="msg {"err" if job["state"] == "error" else ""}">{e(job["detail"])}</div>'
+                if job and not running else "")
+    running_note = ('<div class="card"><span class="spin"></span> <b>Assessment in progress…</b> '
+                    'evaluating every checkpoint. This page refreshes automatically.</div>' if running else "")
+
+    header = f"""
+<div class="ws-head"><div class="wrap flexh">
+<div style="flex:1;min-width:260px"><h1>{e(cfg['name'])}</h1>
+<div class="small">{e(', '.join(cfg.get('sites', [])) or 'Questionnaire-only assessment')}</div>
+<div class="chips">{chips}</div></div>{head_right}</div></div>"""
+
+    account_card = (f'''<h2>Account</h2>
+<div class="card" style="max-width:520px"><b>Sign-in:</b> {e(cfg["auth"]["email"])}
+<form method="post" action="/company/{slug}/password">
+<label>Current password</label><input type="password" name="current" required>
+<label>New password (min 10 characters)</label><input type="password" name="new" required minlength="10">
+<p><button class="btn sm" type="submit">Change password</button></p></form></div>''' if cfg.get("auth") else '')
+    footer = (f'<p style="margin:26px 0"><a href="/" class="small">← home</a> &nbsp;·&nbsp;'
+              f'<form method="post" action="/logout" style="display:inline">'
+              f'<button class="btn sm gray" type="submit">Sign out</button></form></p>')
+
+    # ============ COMPANY (client) VIEW — guided intake + read-only report ====
+    if not is_admin:
+        website_consent = "" if consent.get("granted") or not has_sites else f"""
+<div class="card" style="border-color:#e6d9a8;background:#fff8e6">
+<b>One thing to authorise:</b> we may run a passive, read-only scan of your public website(s)
+({e(', '.join(cfg.get('sites', [])))}). No logins, no form submissions, no intrusion.
+<form method="post" action="/company/{slug}/consent" style="margin-top:8px">
+<input type="text" name="grantedBy" required placeholder="Your name, designation and basis of authorisation" style="max-width:520px">
+<button class="btn sm" type="submit">Authorise website scan</button></form></div>"""
+
+        if running:
+            submit_zone = running_note
+        elif snap:
+            secs = _seconds_since_last_scan(slug)
+            can = secs is None or secs > SCAN_COOLDOWN_SECONDS
+            resubmit = (f'<form method="post" action="/company/{slug}/scan">'
+                        f'<button class="btn" type="submit">↻ Update &amp; re-run assessment</button></form>'
+                        if can else
+                        f'<span class="small">You can refresh the assessment again in about '
+                        f'{int((SCAN_COOLDOWN_SECONDS - secs)/60)+1} minutes. Your engagement team can also re-run it anytime.</span>')
+            submit_zone = (f'<div class="card">✅ Your latest report is ready below. '
+                           f'Updated your questionnaire or access details? {resubmit}</div>')
+        else:
+            submit_zone = f"""
+<div class="card">
+<p>When your inputs are in, submit for assessment. We evaluate every applicable checkpoint and prepare your report.</p>
+<form method="post" action="/company/{slug}/scan">
+<button class="btn big green" type="submit">Submit for assessment →</button></form>
+<p class="small" style="margin-top:8px">You don't manage scans or schedules — submit once and read your report.
+Your engagement team keeps it monitored.</p></div>"""
+
+        reports_zone = (f"<h2>Your report</h2>{_report_tiles(slug, snap)}"
+                        f'<p class="small">Latest {e(snap["scanId"])} · rulebook v{e(snap["rulebookVersion"])}</p>'
+                        if snap else
+                        "<h2>Your report</h2><p class='small'>Your report appears here once the assessment has run.</p>")
+
+        body = f"""{header}<div class="wrap">
+{f'<div class="msg {"err" if is_err else ""}">{e(unquote(msg))}</div>' if msg else ''}
+{job_note}
+<h2>Complete your assessment inputs</h2>
+<p class="small" style="max-width:760px">Three inputs drive your DPDPA assessment. Fill what applies, then submit —
+everything is consent-based and you can update or withdraw anytime.</p>
+<div class="grid c3">
+<div class="tile"><div class="ico">📋</div><h3>1. Questionnaire</h3>
+<p>Declare the internal controls we can't see from outside — policies, registers, workflows.
+<b>{n_answered}/{total_controls}</b> answered.</p>
+<p style="margin-top:10px"><a class="btn sm" href="/company/{slug}/questionnaire">Fill questionnaire</a></p></div>
+<div class="tile"><div class="ico">🔑</div><h3>2. Infrastructure &amp; cloud access</h3>
+<p>Optionally provide <b>read-only</b> access to your cloud/endpoints so we can verify posture directly.
+You grant consent per system and can revoke it anytime.</p>
+<p style="margin-top:10px"><a class="btn sm" href="/company/{slug}/connectors">Provide access &amp; consent</a></p></div>
+<div class="tile"><div class="ico">✅</div><h3>3. Consent</h3>
+<p>Website scan {'authorised' if consent.get('granted') or not has_sites else 'pending below'};
+each access grant carries its own consent. We identify gaps — we never change your systems without permission.</p></div>
+</div>
+{website_consent}
+<h2>Submit</h2>{submit_zone}
+<h2>What your assessment covers</h2>
+<table><tr><th style="width:230px">Surface</th><th style="width:120px">Status</th><th>Detail</th></tr>
+<tr><td>🌐 Public websites &amp; catalogs</td><td>{'<b style="color:var(--ok)">Included</b>' if has_sites else '—'}</td>
+<td class="small">{e(', '.join(cfg.get('sites', [])) or 'no sites listed')}</td></tr>
+<tr><td>📋 Departmental questionnaire</td><td>{'<b style="color:var(--ok)">In use</b>' if n_answered else 'Pending'}</td>
+<td class="small">{n_answered}/{total_controls} checkpoints declared</td></tr>
+{_connector_summary_rows(slug, conns, cmeta, manage=True)}
+</table>
+{reports_zone}
+{account_card}{footer}</div>"""
+        return layout(cfg["name"], body, refresh=4 if running else None)
+
+    # ================= ADMIN (operator) VIEW — full controls =================
+    results = (_report_tiles(slug, snap) +
+               f'<p class="small">Scans on file: {len(list_snapshots(slug))} · latest {e(snap["scanId"])} '
+               f'· rulebook v{e(snap["rulebookVersion"])}</p>' if snap else
+               "<p class='small'>No assessment has run yet.</p>")
     if running:
-        scan_zone = ('<div class="card"><span class="spin"></span> <b>Scan in progress…</b> '
-                     'checking your sites and evaluating all 57 checkpoints. This page refreshes automatically.</div>')
+        scan_zone = running_note
     else:
-        job_note = (f'<div class="msg {"err" if job["state"] == "error" else ""}">{e(job["detail"])}</div>'
-                    if job else "")
         buttons = []
         if has_sites:
-            buttons.append(
-                f'<form method="post" action="/company/{slug}/scan" style="display:inline">'
-                f'<button class="btn green" type="submit" '
-                + ("" if consent.get("granted") else 'disabled title="record scan consent first"')
-                + ">▶ Run full assessment</button></form>")
-        buttons.append(
-            f'<form method="post" action="/company/{slug}/scan?skipweb=1" style="display:inline">'
-            f'<button class="btn gray" type="submit">Run questionnaire-only assessment</button></form>')
-        buttons.append(f'<a class="btn" href="/company/{slug}/questionnaire">✎ Fill questionnaire ({n_answered}/57)</a>')
+            buttons.append(f'<form method="post" action="/company/{slug}/scan" style="display:inline">'
+                           f'<button class="btn green" type="submit" '
+                           + ("" if consent.get("granted") else 'disabled title="record scan consent first"')
+                           + ">▶ Run full assessment</button></form>")
+        buttons.append(f'<form method="post" action="/company/{slug}/scan?skipweb=1" style="display:inline">'
+                       f'<button class="btn gray" type="submit">Run questionnaire-only</button></form>')
+        buttons.append(f'<a class="btn" href="/company/{slug}/questionnaire">✎ Questionnaire ({n_answered}/{total_controls})</a>')
+        buttons.append(f'<a class="btn gray" href="/company/{slug}/connectors">🔑 Connectors</a>')
         scan_zone = job_note + "<p>" + " ".join(buttons) + "</p>"
 
-    consent_zone = "" if consent.get("granted") or not has_sites else f"""
+    admin_consent = "" if consent.get("granted") or not has_sites else f"""
 <div class="card" style="border-color:#e6d9a8;background:#fff8e6">
-<h3 style="margin-top:0">Authorise the website scan</h3>
-<p style="font-size:14px">Web scanning is disabled until your organisation authorises it. Scans are passive,
-read-only visits to your public pages — no credentials, no form submissions, no intrusion.</p>
-<form method="post" action="/company/{slug}/consent">
-<input type="text" name="grantedBy" required placeholder="Name, designation and basis (e.g. approved by R. Sharma, CTO, email dated …)" style="max-width:560px">
-<p><button class="btn" type="submit">Record authorisation</button></p></form></div>"""
+<b>Website scan not authorised.</b> Record the client's authorisation before running a web scan.
+<form method="post" action="/company/{slug}/consent" style="margin-top:8px">
+<input type="text" name="grantedBy" required placeholder="Who authorised, and how" style="max-width:520px">
+<button class="btn sm" type="submit">Record authorisation</button></form></div>"""
 
     alert_rows = "".join(
         f"<tr><td><b>{e(a['type'])}</b></td><td>{e(a.get('controlId', ''))}</td><td>{e(a.get('detail', ''))}</td></tr>"
         for a in alerts.get("alerts", []))
 
-    conns = load_json(client_dir(slug) / "connectors.json", {})
-    cmeta = (snap or {}).get("meta", {})
-
-    def conn_row(key, id_field, icon, label, ready_desc, detail_fn):
-        c = conns.get(key, {})
-        if c.get("consent", {}).get("granted") and c.get(id_field):
-            return (f'<tr><td>{icon} {label}</td><td><b style="color:var(--ok)">Connected</b></td>'
-                    f'<td class="small">{detail_fn(cmeta)} · <a href="/company/{slug}/connectors">manage</a></td></tr>')
-        return (f'<tr><td>{icon} {label}</td><td><span style="color:var(--acc)">Ready to connect</span></td>'
-                f'<td class="small">{ready_desc} <a href="/company/{slug}/connectors">Connect →</a></td></tr>')
-
-    aws_cov = conn_row("aws", "accessKeyId", "☁️", "Cloud posture — AWS",
-                       "Read-only checks: S3, CloudTrail, security groups, RDS, IAM.",
-                       lambda m: (f"Account {e(m.get('awsAccount'))} · {m.get('s3Buckets','?')} buckets read"
-                                  if m.get('awsAccount') else "Credentials saved — run an assessment."))
-    azure_cov = conn_row("azure", "clientId", "🔷", "Cloud posture — Azure",
-                         "Read-only checks: storage, NSG exposure, Defender score.",
-                         lambda m: (f"{m.get('azureSubscriptions','?')} subscription(s) read"
-                                    if 'azureSubscriptions' in m else "Credentials saved — run an assessment."))
-    intune_cov = conn_row("intune", "clientId", "💻", "Endpoints &amp; antivirus (Intune/Defender)",
-                          "Device counts, encryption &amp; AV-compliance coverage.",
-                          lambda m: (f"{m.get('endpointDeviceCount','?')} managed devices read"
-                                     if 'endpointDeviceCount' in m else "Credentials saved — run an assessment."))
-    gcp_cov = conn_row("gcp", "projectId", "🟡", "Cloud posture — Google Cloud",
-                       "Read-only checks: buckets, firewall, Cloud SQL SSL.",
-                       lambda m: (f"{m.get('gcpBuckets','?')} buckets read"
-                                  if 'gcpBuckets' in m else "Credentials saved — run an assessment."))
-
-    body = f"""
-<div class="ws-head"><div class="wrap flexh">
-<div style="flex:1;min-width:260px"><h1>{e(cfg['name'])}</h1>
-<div class="small">{e(', '.join(cfg.get('sites', [])) or 'Questionnaire-only assessment')}</div>
-<div class="chips">{chips}</div></div>{head_right}</div></div>
-<div class="wrap">
+    body = f"""{header}<div class="wrap">
+<div class="msg" style="background:#eef2f6;border-color:#c9d6e2"><b>Admin / operator view</b> —
+full controls. The client sees only their inputs and report.</div>
 {f'<div class="msg {"err" if is_err else ""}">{e(unquote(msg))}</div>' if msg else ''}
-<div class="steps-bar">{''.join(steps)}</div>
-{consent_zone}
-<h2>Assessment</h2>{scan_zone}
-<h2>What this assessment covers</h2>
-<table>
-<tr><th style="width:230px">Surface</th><th style="width:130px">Status</th><th>Detail</th></tr>
-<tr><td>🌐 Public websites &amp; catalogs</td><td>{'<b style="color:var(--ok)">Scanned</b>' if (snap and has_sites and snap.get('meta', {}).get('pagesScanned')) else ('Ready' if has_sites else '—')}</td>
-<td class="small">{e(', '.join(cfg.get('sites', [])) or 'no sites listed')}{f" · {len(snap.get('meta', {}).get('pagesScanned', []))} pages read on last scan" if snap and snap.get('meta', {}).get('pagesScanned') else ''}</td></tr>
-<tr><td>📋 Departmental questionnaire</td><td>{'<b style="color:var(--ok)">In use</b>' if n_answered else 'Pending'}</td>
-<td class="small">{n_answered}/57 checkpoints declared</td></tr>
-{aws_cov}{azure_cov}{gcp_cov}{intune_cov}
-<tr><td>🏢 Directory &amp; firewall policies (AD / GPO / firewall)</td><td><span style="color:var(--na)">Not connected</span></td>
-<td class="small">Upload-based connector on roadmap — run by your own administrators; we never hold domain credentials.</td></tr>
+{admin_consent}
+<h2>Run assessment</h2>{scan_zone}
+<h2>Coverage &amp; connectors</h2>
+<table><tr><th style="width:230px">Surface</th><th style="width:120px">Status</th><th>Detail</th></tr>
+<tr><td>🌐 Public websites</td><td>{'<b style="color:var(--ok)">Scanned</b>' if (snap and cmeta.get('pagesScanned')) else ('Ready' if has_sites else '—')}</td>
+<td class="small">{e(', '.join(cfg.get('sites', [])) or 'no sites')}{f" · {len(cmeta.get('pagesScanned', []))} pages last scan" if snap and cmeta.get('pagesScanned') else ''}</td></tr>
+<tr><td>📋 Questionnaire</td><td>{'<b style="color:var(--ok)">In use</b>' if n_answered else 'Pending'}</td>
+<td class="small">{n_answered}/{total_controls} declared</td></tr>
+{_connector_summary_rows(slug, conns, cmeta, manage=True)}
+<tr><td>🏢 AD / GPO / firewall</td><td><span style="color:var(--na)">Not connected</span></td>
+<td class="small">Upload-based connector on roadmap.</td></tr>
 </table>
 <h2>Reports</h2>{results}
 <h2>Change alerts</h2>
-<p class="small">Raised automatically when a re-scan finds a regression, a new third party, or a rulebook change.</p>
 <table><tr><th style="width:170px">Type</th><th style="width:90px">Control</th><th>Detail</th></tr>
 {alert_rows or '<tr><td colspan="3" class="small">none — run at least two scans to compare</td></tr>'}</table>
-{f'''<h2>Account</h2>
-<div class="card" style="max-width:520px"><b>Sign-in:</b> {e(cfg["auth"]["email"])}
-<form method="post" action="/company/{slug}/password">
-<label>Current password</label><input type="password" name="current" required>
-<label>New password (min 10 characters)</label><input type="password" name="new" required minlength="10">
-<p><button class="btn sm" type="submit">Change password</button></p></form></div>''' if cfg.get("auth") else ''}
-<p style="margin:26px 0"><a href="/" class="small">← back to home</a> &nbsp;·&nbsp;
-<form method="post" action="/logout" style="display:inline"><button class="btn sm gray" type="submit">Sign out</button></form></p>
+<p style="margin:26px 0"><a href="/admin" class="small">← operations dashboard</a></p>
 </div>"""
     return layout(cfg["name"], body, refresh=4 if running else None)
 
@@ -521,7 +609,8 @@ class App(BaseHTTPRequestHandler):
                 if not self._may_access(slug):
                     return self._redirect("/login?msg=" + quote("Please sign in to access your workspace."))
                 if len(parts) == 2:
-                    return self._send(page_company(slug, q.get("msg", ""), q.get("err") == "1"))
+                    return self._send(page_company(slug, q.get("msg", ""), q.get("err") == "1",
+                                                   is_admin=self._is_admin()))
                 if parts[2] == "questionnaire":
                     return self._send(page_questionnaire(slug))
                 if parts[2] == "connectors":
@@ -690,8 +779,19 @@ class App(BaseHTTPRequestHandler):
 
                 if action == "scan":
                     skip_web = "skipweb=1" in (u.query or "")
+                    # Clients cannot choose skip_web and are rate-limited to prevent abuse
+                    if not self._is_admin():
+                        secs = _seconds_since_last_scan(slug)
+                        if secs is not None and secs < SCAN_COOLDOWN_SECONDS:
+                            return self._redirect(f"/company/{slug}?err=1&msg=" + quote(
+                                f"An assessment ran recently — please wait about {int((SCAN_COOLDOWN_SECONDS - secs)/60)+1} "
+                                "minutes before re-running, or ask your engagement team."))
+                        skip_web = not cfg.get("sites")  # client always gets full scan where sites exist
                     if not skip_web and not cfg.get("scanConsent", {}).get("granted"):
-                        return self._redirect(f"/company/{slug}?err=1&msg=" + quote("Web scan blocked: record authorisation first (or run questionnaire-only)."))
+                        if not cfg.get("sites"):
+                            skip_web = True
+                        else:
+                            return self._redirect(f"/company/{slug}?err=1&msg=" + quote("Please authorise the website scan first."))
                     if not skip_web and not cfg.get("sites"):
                         skip_web = True
                     _start_scan(slug, skip_web)
