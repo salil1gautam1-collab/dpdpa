@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import secrets as _secrets
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -15,19 +17,24 @@ from .crypto import using_derived_key
 from .db import engine
 from . import ratelimit
 from .routers import admin, auth, client, companies, connectors, reports
+from .templating import render
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(name)s %(message)s')
 log = logging.getLogger("trackvault")
+access_log = logging.getLogger("trackvault.access")
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Seeding runs once in the entrypoint (before workers start), not per-worker.
-    if using_derived_key() and settings.is_production:
-        log.warning("SECURITY: TRACKVAULT_ENCRYPTION_KEY is not set in production — "
-                    "secrets are encrypted with a key derived from SECRET_KEY. Set a dedicated key.")
+    if settings.is_production:
+        issues = settings.production_issues()
+        if issues:
+            for i in issues:
+                log.error("PRODUCTION CONFIG: %s", i)
+            raise RuntimeError("Insecure production configuration — see logs. Refusing to start.")
     log.info("TrackVault %s started (env=%s)", __version__, settings.environment)
     yield
 
@@ -44,14 +51,39 @@ if _static.exists():
 async def security_and_rate_limit(request: Request, call_next):
     ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
           or (request.client.host if request.client else "unknown"))
+    rid = request.headers.get("x-request-id") or _secrets.token_hex(8)
+    request.state.request_id = rid
+    request.state.client_ip = ip
     path = request.url.path
     is_login = path in ("/login", "/auth/login")
     limit = settings.login_rate_limit_per_minute if is_login else settings.rate_limit_per_minute
     if not path.startswith("/static") and not ratelimit.allow(f"{ip}:{'login' if is_login else 'gen'}", limit):
+        access_log.warning("rid=%s ip=%s 429 %s %s", rid, ip, request.method, path)
         return PlainTextResponse("Too many requests — slow down.", status_code=429)
 
-    request.state.client_ip = ip
-    response = await call_next(request)
+    started = time.monotonic()
+    try:
+        response = await call_next(request)
+    except Exception:
+        dur = int((time.monotonic() - started) * 1000)
+        log.exception("rid=%s ip=%s 500 %s %s (%dms)", rid, ip, request.method, path, dur)
+        try:
+            resp = render(request, "error.html", status_code=500, request_id=rid,
+                          detail=("An unexpected error occurred. Please try again." if settings.is_production
+                                  else "Internal error (see server logs)."))
+        except Exception:
+            resp = PlainTextResponse("Internal server error.", status_code=500)
+        return _harden(resp)
+
+    dur = int((time.monotonic() - started) * 1000)
+    if not path.startswith("/static"):
+        access_log.info("rid=%s ip=%s %s %s %s (%dms)", rid, ip, response.status_code,
+                        request.method, path, dur)
+    response.headers["X-Request-ID"] = rid
+    return _harden(response)
+
+
+def _harden(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -65,20 +97,25 @@ async def security_and_rate_limit(request: Request, call_next):
 
 @app.get("/healthz")
 def healthz():
-    db_ok = True
+    """Liveness + basic status (no DB dependency for liveness)."""
+    return JSONResponse({
+        "status": "ok",
+        "version": __version__,
+        "encryption": "derived-key-insecure" if using_derived_key() else "dedicated-key",
+        "environment": settings.environment,
+    })
+
+
+@app.get("/readyz")
+def readyz():
+    """Readiness — checks the database is reachable."""
     try:
         with engine.connect() as conn:
             conn.exec_driver_sql("SELECT 1")
     except Exception as ex:  # pragma: no cover
-        db_ok = False
-        log.error("healthz db check failed: %s", ex)
-    return JSONResponse({
-        "status": "ok" if db_ok else "degraded",
-        "version": __version__,
-        "database": "ok" if db_ok else "error",
-        "encryption": "derived-key-insecure" if using_derived_key() else "dedicated-key",
-        "environment": settings.environment,
-    }, status_code=200 if db_ok else 503)
+        log.error("readyz db check failed: %s", ex)
+        return JSONResponse({"status": "not-ready", "database": "error"}, status_code=503)
+    return JSONResponse({"status": "ready", "database": "ok"})
 
 
 app.include_router(auth.router)

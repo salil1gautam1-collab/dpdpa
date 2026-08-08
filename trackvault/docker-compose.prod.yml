@@ -1,0 +1,69 @@
+# Production stack: Postgres + app (behind Caddy for automatic HTTPS).
+# Usage:
+#   1. cp .env.production.example .env  &&  fill it (python scripts/generate_keys.py)
+#   2. export SITE_ADDRESS=trackvault.in
+#   3. docker compose -f docker-compose.prod.yml up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trackvault}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-trackvault}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trackvault}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TRACKVAULT_ENVIRONMENT: production
+      TRACKVAULT_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-trackvault}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-trackvault}
+      TRACKVAULT_SECRET_KEY: ${TRACKVAULT_SECRET_KEY:?set TRACKVAULT_SECRET_KEY}
+      TRACKVAULT_ENCRYPTION_KEY: ${TRACKVAULT_ENCRYPTION_KEY:?set TRACKVAULT_ENCRYPTION_KEY}
+      TRACKVAULT_BASE_URL: ${TRACKVAULT_BASE_URL:-https://localhost}
+      TRACKVAULT_BOOTSTRAP_ADMIN_EMAIL: ${TRACKVAULT_BOOTSTRAP_ADMIN_EMAIL:-admin@trackvault.local}
+      TRACKVAULT_BOOTSTRAP_ADMIN_PASSWORD: ${TRACKVAULT_BOOTSTRAP_ADMIN_PASSWORD:?set a strong admin password}
+      TRACKVAULT_SMTP_HOST: ${TRACKVAULT_SMTP_HOST:-}
+      TRACKVAULT_SMTP_PORT: ${TRACKVAULT_SMTP_PORT:-587}
+      TRACKVAULT_SMTP_USER: ${TRACKVAULT_SMTP_USER:-}
+      TRACKVAULT_SMTP_PASS: ${TRACKVAULT_SMTP_PASS:-}
+      TRACKVAULT_SMTP_FROM: ${TRACKVAULT_SMTP_FROM:-info@dedicatusit.com}
+      TRACKVAULT_TEST_RECIPIENT: ${TRACKVAULT_TEST_RECIPIENT:-}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/readyz').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+    # Not published to the host — only Caddy talks to it.
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

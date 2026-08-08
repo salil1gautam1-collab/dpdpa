@@ -32,6 +32,12 @@ def _login(client, email, password):
 def test_health(client):
     r = client.get("/healthz")
     assert r.status_code == 200
+    assert r.json()["status"] == "ok"
+
+
+def test_readiness(client):
+    r = client.get("/readyz")
+    assert r.status_code == 200
     assert r.json()["database"] == "ok"
 
 

@@ -1,0 +1,12 @@
+# TrackVault reverse proxy.
+# Set SITE_ADDRESS to your domain (e.g. trackvault.in) and Caddy provisions a
+# Let's Encrypt HTTPS certificate automatically. Left as :80 it serves plain
+# HTTP — useful only for local testing behind another TLS terminator.
+{$SITE_ADDRESS::80} {
+	encode gzip
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+	reverse_proxy app:8000
+}

@@ -52,7 +52,25 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.environment.lower() == "production"
 
+    _DEFAULTS = {
+        "secret_key": "dev-insecure-change-me-32chars-min",
+        "bootstrap_admin_password": "ChangeMe!Admin2026",
+    }
+
+    def production_issues(self) -> list[str]:
+        """Blocking misconfigurations that must be fixed before production."""
+        issues = []
+        if self.secret_key == self._DEFAULTS["secret_key"] or len(self.secret_key) < 32:
+            issues.append("TRACKVAULT_SECRET_KEY is default or too short (set a random value >=32 chars).")
+        if not self.encryption_key.strip():
+            issues.append("TRACKVAULT_ENCRYPTION_KEY is not set — connector secrets would use a key "
+                          "derived from SECRET_KEY. Set a dedicated key (scripts/generate_keys.py).")
+        if self.bootstrap_admin_password == self._DEFAULTS["bootstrap_admin_password"]:
+            issues.append("TRACKVAULT_BOOTSTRAP_ADMIN_PASSWORD is still the default — set a strong one.")
+        return issues
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+

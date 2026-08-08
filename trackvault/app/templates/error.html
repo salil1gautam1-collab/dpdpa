@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Something went wrong{% endblock %}
+{% block body %}
+<div style="max-width:520px;margin:60px auto;text-align:center">
+  <div style="font-size:44px">⚠️</div>
+  <h1>Something went wrong</h1>
+  <p class="small">{{ detail }}</p>
+  {% if request_id %}<p class="small">Reference: <span class="tag">{{ request_id }}</span></p>{% endif %}
+  <p style="margin-top:20px"><a class="btn" href="/">Back to home</a></p>
+</div>
+{% endblock %}

@@ -16,6 +16,9 @@ else:
     raise SystemExit("database not reachable")
 PY
 
+echo "Checking configuration..."
+python -m app.check_config
+
 echo "Running migrations..."
 alembic upgrade head
 
