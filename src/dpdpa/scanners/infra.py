@@ -27,6 +27,8 @@ _CONNECTORS = [
     ("azure", "azure", "clientId", "Azure"),
     ("intune", "intune", "clientId", "Intune/Defender endpoints"),
     ("gcp", "gcp", "accessToken", "Google Cloud"),
+    ("adgpo", "adgpo", "collectorJson", "Active Directory / GPO"),
+    ("firewall", "firewall", "configText", "Firewall config"),
 ]
 
 
@@ -49,6 +51,4 @@ def run(cfg: dict) -> tuple[list, dict]:
         else:
             meta[state_key] = "not configured"
 
-    meta["infraScannerNote"] = ("AD/GPO collector and firewall ingestion are specified "
-                                "(docs/INFRA-SCANNER-SPEC.md) but not yet implemented")
     return findings, meta

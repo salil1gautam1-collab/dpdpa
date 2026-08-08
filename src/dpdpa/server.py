@@ -159,7 +159,15 @@ def _connector_summary_rows(slug: str, conns: dict, cmeta: dict, manage: bool) -
         row("intune", "clientId", "💻", "Endpoints &amp; antivirus (Intune/Defender)",
             "Device counts, encryption &amp; AV-compliance coverage.",
             lambda m: (f"{m.get('endpointDeviceCount','?')} managed devices read"
-                       if 'endpointDeviceCount' in m else "Access provided — awaiting next assessment.")))
+                       if 'endpointDeviceCount' in m else "Access provided — awaiting next assessment.")) +
+        row("adgpo", "collectorJson", "🏢", "Directory &amp; identity (AD / GPO)",
+            "Password policy, privileged accounts, stale accounts, GPO hardening.",
+            lambda m: (f"{m.get('adTotalUsers','?')} users; collector parsed"
+                       if 'adTotalUsers' in m else "Collector output provided — awaiting next assessment.")) +
+        row("firewall", "configText", "🧱", "Firewall &amp; perimeter",
+            "Any-any rules, management exposure, logging.",
+            lambda m: (f"{m.get('firewallLines','?')} config lines parsed"
+                       if 'firewallLines' in m else "Config provided — awaiting next assessment.")))
 
 
 def page_company(slug: str, msg: str = "", is_err: bool = False, is_admin: bool = False) -> bytes:
@@ -328,8 +336,6 @@ full controls. The client sees only their inputs and report.</div>
 <tr><td>📋 Questionnaire</td><td>{'<b style="color:var(--ok)">In use</b>' if n_answered else 'Pending'}</td>
 <td class="small">{n_answered}/{total_controls} declared</td></tr>
 {_connector_summary_rows(slug, conns, cmeta, manage=True)}
-<tr><td>🏢 AD / GPO / firewall</td><td><span style="color:var(--na)">Not connected</span></td>
-<td class="small">Upload-based connector on roadmap.</td></tr>
 </table>
 <h2>Reports</h2>{results}
 <h2>Change alerts</h2>
@@ -463,6 +469,45 @@ def page_connectors(slug: str, msg: str = "", is_err: bool = False) -> bytes:
          ("accessToken", "OAuth2 access token", "password", "")],
         conns.get("gcp", {}), "projectId")
 
+    ad = conns.get("adgpo", {})
+    ad_connected = ad.get("consent", {}).get("granted") and ad.get("collectorJson")
+    ad_card = f"""<div class="card">
+<h3 style="margin-top:0">🏢 Active Directory / Group Policy <span class="small">— collector paste</span></h3>
+<p style="font-size:14px">Checks domain password policy, privileged-account count, stale accounts and GPO
+hardening. Your <b>own</b> domain admin runs a read-only collector — we never hold domain credentials.</p>
+<div class="notice"><b>How:</b> download and review
+<a href="/collectors/ad-gpo-collector.ps1" target="_blank"><code>ad-gpo-collector.ps1</code></a>
+(read-only PowerShell), run it on a domain-joined machine, and paste its JSON output below.
+{'✅ <b>Collector output on file.</b>' if ad_connected else ''}</div>
+<form method="post" action="/company/{slug}/connectors/adgpo">
+<label>Collector JSON output</label>
+<textarea name="collectorJson" rows="5" placeholder='{{ "passwordPolicy": {{...}}, "privilegedGroups": {{...}}, ... }}'>{e(ad.get('collectorJson','') if ad_connected else '')}</textarea>
+<div class="consent-box"><label style="margin:0;font-weight:600">
+<input type="checkbox" name="consent" value="1" style="width:auto;margin-right:8px" {'checked' if ad_connected else ''}>
+I authorise {PRODUCT_NAME} to evaluate this directory posture output.</label></div>
+<button class="btn green" type="submit">{'Update' if ad_connected else 'Submit collector output'}</button>
+{f'</form><form method="post" action="/company/{slug}/connectors/adgpo/disconnect"><button class="btn sm red" type="submit">Remove</button>' if ad_connected else ''}
+</form></div>"""
+
+    fw = conns.get("firewall", {})
+    fw_connected = fw.get("consent", {}).get("granted") and fw.get("configText")
+    fw_card = f"""<div class="card">
+<h3 style="margin-top:0">🧱 Firewall configuration <span class="small">— config paste</span></h3>
+<p style="font-size:14px">Heuristically flags any-any rules, exposed management ports and missing logging
+across common formats (iptables, Cisco, Fortinet, pfSense). Findings are marked for human confirmation.</p>
+<div class="notice"><b>How:</b> export your firewall configuration/ruleset and paste it below.
+Redact anything you consider sensitive first — we only need the rule structure.
+{'✅ <b>Configuration on file.</b>' if fw_connected else ''}</div>
+<form method="post" action="/company/{slug}/connectors/firewall">
+<label>Firewall configuration / ruleset</label>
+<textarea name="configText" rows="6" placeholder="paste firewall config or ruleset export">{e(fw.get('configText','') if fw_connected else '')}</textarea>
+<div class="consent-box"><label style="margin:0;font-weight:600">
+<input type="checkbox" name="consent" value="1" style="width:auto;margin-right:8px" {'checked' if fw_connected else ''}>
+I authorise {PRODUCT_NAME} to evaluate this firewall configuration.</label></div>
+<button class="btn green" type="submit">{'Update' if fw_connected else 'Submit configuration'}</button>
+{f'</form><form method="post" action="/company/{slug}/connectors/firewall/disconnect"><button class="btn sm red" type="submit">Remove</button>' if fw_connected else ''}
+</form></div>"""
+
     body = f"""
 <section><div class="wrap" style="max-width:820px">
 <p class="small"><a href="/company/{slug}">← {e(cfg['name'])}</a></p>
@@ -470,13 +515,8 @@ def page_connectors(slug: str, msg: str = "", is_err: bool = False) -> bytes:
 <p class="small">All connectors are read-only and run only after you authorise them here. Credentials never
 leave this workspace and are never committed to source control. We store posture findings, never your data.</p>
 {f'<div class="msg {"err" if is_err else ""}">{e(unquote(msg))}</div>' if msg else ''}
-{aws_card}{azure_card}{intune_card}{gcp_card}
-<div class="card" style="opacity:.7">
-<h3 style="margin-top:0">Active Directory / GPO · Firewall configs <span class="small">— next release (upload-based)</span></h3>
-<p style="font-size:14px">These use a config-export upload (a signed collector script your own admins run,
-or a firewall config file) rather than live credentials. The checkpoints are defined; the ingestion UI
-is the next connector we ship.</p></div>
-<p class="small">Credentials are stored in this workspace's <code>connectors.json</code> (gitignored).
+{aws_card}{azure_card}{intune_card}{gcp_card}{ad_card}{fw_card}
+<p class="small">Credentials and collector inputs are stored in this workspace's <code>connectors.json</code> (gitignored).
 For production, move them to a managed secrets vault — see docs/DOTNET-IMPLEMENTATION-GUIDE.md.</p>
 </div></section>"""
     return layout("Connectors", body)
@@ -590,6 +630,12 @@ class App(BaseHTTPRequestHandler):
                 return self._send(landing())
             if parts == ["start"]:
                 return self._send(start_form())
+            if parts == ["collectors", "ad-gpo-collector.ps1"]:
+                from .workspace import REPO_ROOT
+                f = REPO_ROOT / "docs" / "collectors" / "ad-gpo-collector.ps1"
+                if f.is_file():
+                    return self._send(f.read_bytes(), "text/plain; charset=utf-8")
+                return self._send(layout("Not found", "<section><div class='wrap'><p>collector not found</p></div></section>"), code=404)
             if parts == ["login"]:
                 return self._send(company_login(q.get("msg", "")))
             if parts[0] == "admin":
@@ -732,6 +778,8 @@ class App(BaseHTTPRequestHandler):
                     "azure": ("clientId", ["clientSecret"], [("tenantId", ""), ("region", "")], "Azure"),
                     "intune": ("clientId", ["clientSecret"], [("tenantId", "")], "Intune/Defender"),
                     "gcp": ("projectId", ["accessToken"], [], "Google Cloud"),
+                    "adgpo": ("collectorJson", [], [], "Active Directory / GPO"),
+                    "firewall": ("configText", [], [], "Firewall config"),
                 }
                 if provider in specs and len(parts) == 4:
                     id_field, secret_fields, plain_fields, label = specs[provider]
