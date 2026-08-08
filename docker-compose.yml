@@ -7,4 +7,8 @@ services:
       - "127.0.0.1:8377:8377"
     volumes:
       - ./local:/app/local
+    # SMTP + brand config; optional so the app still runs without a .env file.
+    env_file:
+      - path: .env
+        required: false
     restart: unless-stopped

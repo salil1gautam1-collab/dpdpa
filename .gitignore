@@ -9,6 +9,9 @@ _outbox.json
 _rulebooks/
 *.client.json
 *.evidence.json
+
+# Secrets / environment — never commit
+.env
 # Cloud/infra credentials — never commit, even if a workspace escapes local/
 connectors.json
 *.credentials.json

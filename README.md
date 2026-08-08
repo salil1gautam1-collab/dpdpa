@@ -41,6 +41,13 @@ all engagements — default password `dpdpa-admin`, change it via the
 `DPDPA_ADMIN_PASSWORD` environment variable (set it in `docker-compose.yml`).
 Client data persists in `./local` on the host (volume mount), never in the image.
 
+**Email notifications (optional):** copy `.env.example` to `.env` and fill the
+`TRACKVAULT_SMTP_*` values (host, user, password; sender defaults to
+`info@dedicatusit.com`). Leave `TRACKVAULT_SMTP_HOST` blank to keep email in
+**simulated** mode — notifications are created and logged but nothing is sent.
+`.env` is gitignored; never commit credentials. Restart with `docker compose up -d`
+after editing.
+
 **Without Docker** (Python 3.10+, no third-party packages):
 
 ```bash
