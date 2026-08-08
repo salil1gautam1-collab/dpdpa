@@ -33,16 +33,28 @@ def smtp_configured() -> bool:
     return bool(os.environ.get("TRACKVAULT_SMTP_HOST") and os.environ.get("TRACKVAULT_SMTP_PASS"))
 
 
-def _send_email(to: str, subject: str, body: str) -> str:
-    """Return delivery status: 'sent', 'simulated', or 'error: ...'."""
+def test_recipient() -> str:
+    """If set, ALL email is redirected here (a safety guard for testing)."""
+    return os.environ.get("TRACKVAULT_TEST_RECIPIENT", "").strip()
+
+
+def _send_email(to: str, subject: str, body: str) -> tuple[str, str]:
+    """Return (status, actual_recipient). status: 'sent'|'simulated'|'error: ...'."""
     if not to:
-        return "no-recipient"
+        return "no-recipient", ""
+    actual_to = to
+    guard = test_recipient()
+    if guard:
+        body = (f"*** TEST MODE — this email was redirected to the test address. ***\n"
+                f"*** Intended recipient: {to} ***\n\n") + body
+        subject = f"[TEST→{to}] {subject}"
+        actual_to = guard
     if not smtp_configured():
-        return "simulated"
+        return "simulated", actual_to
     try:
         msg = EmailMessage()
         msg["From"] = os.environ.get("TRACKVAULT_SMTP_FROM", os.environ["TRACKVAULT_SMTP_USER"])
-        msg["To"] = to
+        msg["To"] = actual_to
         msg["Subject"] = subject
         msg.set_content(body)
         host = os.environ["TRACKVAULT_SMTP_HOST"]
@@ -52,9 +64,9 @@ def _send_email(to: str, subject: str, body: str) -> str:
             if os.environ.get("TRACKVAULT_SMTP_USER"):
                 s.login(os.environ["TRACKVAULT_SMTP_USER"], os.environ.get("TRACKVAULT_SMTP_PASS", ""))
             s.send_message(msg)
-        return "sent"
+        return "sent", actual_to
     except Exception as ex:
-        return f"error: {type(ex).__name__}: {ex}"
+        return f"error: {type(ex).__name__}: {ex}", actual_to
 
 
 def notify(slug: str, ntype: str, title: str, body: str, email_to: str = "",
@@ -62,18 +74,23 @@ def notify(slug: str, ntype: str, title: str, body: str, email_to: str = "",
     """Create a portal notification and (optionally) an email. Returns the item."""
     path = client_dir(slug) / "notifications.json"
     data = load_json(path, {"items": []})
-    email_status = _send_email(email_to, f"[{ntype}] {title}", body) if (email and email_to) else "not-sent"
+    if email and email_to:
+        status, actual_to = _send_email(email_to, f"[{ntype}] {title}", body)
+    else:
+        status, actual_to = "not-sent", ""
+    redirected = actual_to and actual_to != email_to
     item = {"id": _next_id(data["items"]), "type": ntype, "title": title, "body": body,
             "createdAt": utc_now(), "read": False,
-            "email": {"to": email_to, "status": email_status}}
+            "email": {"to": email_to, "status": status,
+                      **({"redirectedTo": actual_to} if redirected else {})}}
     data["items"].insert(0, item)
     save_json(path, data)
 
     if email and email_to:
         ob = load_json(_OUTBOX, {"items": []})
         ob["items"].insert(0, {"id": _next_id(ob["items"]), "slug": slug, "to": email_to,
-                               "subject": f"[{ntype}] {title}", "status": email_status,
-                               "sentAt": utc_now()})
+                               "deliveredTo": actual_to, "subject": f"[{ntype}] {title}",
+                               "status": status, "sentAt": utc_now()})
         save_json(_OUTBOX, ob)
     return item
 

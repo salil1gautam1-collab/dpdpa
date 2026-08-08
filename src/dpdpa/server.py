@@ -685,9 +685,15 @@ def page_outbox() -> bytes:
     from . import notify as _n
     rows = "".join(
         f"<tr><td class='small'>{e(x.get('sentAt','')[:16])}</td><td>{e(x.get('slug',''))}</td>"
-        f"<td>{e(x.get('to',''))}</td><td class='small'>{e(x.get('subject',''))}</td>"
+        f"<td>{e(x.get('to',''))}"
+        + (f"<br><span class='small' style='color:var(--warn)'>→ redirected to {e(x.get('deliveredTo'))}</span>"
+           if x.get('deliveredTo') and x.get('deliveredTo') != x.get('to') else "")
+        + f"</td><td class='small'>{e(x.get('subject',''))}</td>"
         f"<td>{e(x.get('status',''))}</td></tr>" for x in _n.outbox()[:100])
+    guard = _n.test_recipient()
     mode = "LIVE (SMTP configured)" if _n.smtp_configured() else "SIMULATED (set TRACKVAULT_SMTP_* to send real email)"
+    if guard:
+        mode += f" · 🔒 TEST MODE: all email redirected to {guard}"
     body = f"""
 <section><div class="wrap">
 <p class="small"><a href="/admin">← operations dashboard</a></p>
