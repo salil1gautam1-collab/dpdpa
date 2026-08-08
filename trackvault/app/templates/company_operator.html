@@ -42,10 +42,23 @@
     <button class="btn gray">Run questionnaire-only</button>
   </form>
   {% endif %}
+  <a class="btn" href="/companies/{{ c.id }}/questionnaire">✎ Questionnaire ({{ answered }}/{{ total }})</a>
   <a class="btn" href="/companies/{{ c.id }}/connectors">🔑 Connectors</a>
   <a class="btn gray" href="/companies/{{ c.id }}/history">History &amp; compare</a>
 </div>
-<p class="small">Questionnaire: {{ answered }}/{{ total }} answered.</p>
+
+<h2>Import customer data</h2>
+<div class="card">
+  <p class="small">Already collected the customer's answers (like the TradeIndia data sheet)? Paste them here to
+    load the whole assessment at once, then run it. Accepts an array of answers, or an object with
+    <code>assertions</code> and optional <code>sites</code>.</p>
+  <form method="post" action="/companies/{{ c.id }}/import">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <textarea name="payload" rows="6" placeholder='{"sites":["https://www.example.com"],
+ "assertions":[{"controlId":"SEC-01","status":"GAP","evidence":"Security marked Not Compliant","source":{"department":"IT"}}]}'></textarea>
+    <p style="margin-top:12px"><button class="btn green" type="submit">Import answers</button></p>
+  </form>
+</div>
 
 <h2>Client access</h2>
 <div class="card">

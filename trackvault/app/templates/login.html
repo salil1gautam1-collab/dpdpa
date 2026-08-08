@@ -1,16 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Sign in{% endblock %}
 {% block body %}
-<div style="max-width:420px;margin:30px auto">
-  <h1>Sign in</h1>
-  <p class="small">TrackVault — DPDPA compliance platform.</p>
+<div class="authwrap">
+  <div class="auth-hero">
+    <div class="lock">🔐</div>
+    <h1 style="margin:6px 0 2px">Sign in to {{ brand }}</h1>
+    <p class="small">Customers and engagement teams sign in here.</p>
+  </div>
   {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
   <div class="card">
     <form method="post" action="/auth/login">
-      <label>Email</label><input type="email" name="email" required autofocus>
-      <label>Password</label><input type="password" name="password" required>
-      <p style="margin-top:16px"><button class="btn" type="submit">Sign in</button></p>
+      <label>Email</label><input type="email" name="email" required autofocus autocomplete="username">
+      <label>Password</label><input type="password" name="password" required autocomplete="current-password">
+      <p style="margin-top:18px"><button class="btn" type="submit" style="width:100%">Sign in</button></p>
     </form>
+    <p class="small" style="margin-top:14px">New customer? Your engagement team sets up your login and shares a
+      one-time password. Forgot it? Contact your engagement manager to reset it.</p>
   </div>
+  <p class="small" style="text-align:center"><a href="/">← back to home</a></p>
 </div>
 {% endblock %}

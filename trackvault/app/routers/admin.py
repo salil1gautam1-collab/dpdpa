@@ -77,8 +77,54 @@ def rulebook_page(request: Request, db: Session = Depends(get_db)):
             return f"{int(v.split('.')[0]) + 1}.0.0"
         except Exception:
             return "5.0.0"
+    cats = current.data.get("categories", []) if current else []
     return render(request, "admin_rulebook.html", books=list(reversed(books)),
-                  current=current, next_version=bump(current.version) if current else "1.0.0")
+                  current=current, next_version=bump(current.version) if current else "1.0.0",
+                  categories=cats, severities=["critical", "high", "medium", "low"],
+                  methods=["questionnaire", "evidence", "hybrid", "web"])
+
+
+@router.post("/admin/rulebook/add-checkpoint")
+async def rulebook_add_checkpoint(request: Request, db: Session = Depends(get_db)):
+    p = require(request, db, roles=RULEBOOK_ROLES)
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    version = (form.get("version", "") or "").strip()
+    cid = (form.get("id", "") or "").strip().upper()
+    control = {
+        "id": cid,
+        "category": (form.get("category", "") or "").strip(),
+        "severity": (form.get("severity", "") or "medium").strip(),
+        "title": (form.get("title", "") or "").strip(),
+        "legalRef": (form.get("legalRef", "") or "").strip(),
+        "description": (form.get("description", "") or "").strip(),
+        "checkMethod": (form.get("checkMethod", "") or "questionnaire").strip(),
+        "evidenceRequired": (form.get("evidenceRequired", "") or "").strip(),
+        "remediation": (form.get("remediation", "") or "").strip(),
+        "appAssist": {"possible": bool(form.get("appAssist")),
+                      "how": (form.get("appAssistHow", "") or "").strip()},
+    }
+    try:
+        if not cid or not control["title"] or not control["category"]:
+            raise ValueError("id, title and category are required")
+        rb = json.loads(json.dumps(latest_rulebook(db)))
+        if cid in {c["id"] for c in rb["controls"]}:
+            raise ValueError(f"control id {cid} already exists")
+        if control["category"] not in {c["id"] for c in rb["categories"]}:
+            raise ValueError(f"unknown category {control['category']}")
+        if not version or db.execute(select(Rulebook).where(Rulebook.version == version)).scalar_one_or_none():
+            raise ValueError("provide a new, unused version number")
+        rb["rulebookVersion"] = version
+        rb["lastUpdated"] = date.today().isoformat()
+        rb["updateNote"] = (form.get("note", "") or f"Added checkpoint {cid}.").strip()
+        rb["controls"].append(control)
+        db.add(Rulebook(version=version, data=rb, source="imported", imported_by=p.user.email))
+        db.commit()
+        record(db, action="rulebook.add_checkpoint", actor=p.user, target_type="rulebook",
+               target_id=version, ip=getattr(request.state, "client_ip", ""), control=cid)
+        return redirect("/admin/rulebook", f"Published rulebook v{version} with new checkpoint {cid}.")
+    except (json.JSONDecodeError, ValueError) as ex:
+        return redirect("/admin/rulebook", f"Could not add checkpoint: {ex}", err=True)
 
 
 @router.post("/admin/rulebook/append")

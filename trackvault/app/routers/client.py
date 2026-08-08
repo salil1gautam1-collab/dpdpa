@@ -78,7 +78,8 @@ def questionnaire(request: Request, db: Session = Depends(get_db)):
         QuestionnaireAnswer.company_id == c.id)).scalars()}
     cats = {x["id"]: x["name"] for x in rb["categories"]}
     return render(request, "questionnaire.html", c=c, controls=rb["controls"], cats=cats,
-                  existing=existing, valid=sorted(VALID), back="/workspace")
+                  existing=existing, valid=sorted(VALID), back="/workspace",
+                  action="/workspace/questionnaire")
 
 
 @router.post("/workspace/questionnaire")

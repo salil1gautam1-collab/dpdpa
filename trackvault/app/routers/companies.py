@@ -126,6 +126,79 @@ def run_scan(cid: str, request: Request, skip_web: str = Form(""), csrf: str = F
     return redirect(f"/companies/{cid}", f"Assessment complete — score {snap.score}%. Client notified.")
 
 
+@router.get("/companies/{cid}/questionnaire")
+def op_questionnaire(cid: str, request: Request, db: Session = Depends(get_db)):
+    p = require(request, db, operator=True)
+    c = _company_or_404(db, p.user.organization_id, cid)
+    rb = latest_rulebook(db)
+    existing = {a.control_id: a for a in db.execute(select(QuestionnaireAnswer).where(
+        QuestionnaireAnswer.company_id == cid)).scalars()}
+    cats = {x["id"]: x["name"] for x in rb["categories"]}
+    from .client import VALID
+    return render(request, "questionnaire.html", c=c, controls=rb["controls"], cats=cats,
+                  existing=existing, valid=sorted(VALID), back=f"/companies/{cid}",
+                  action=f"/companies/{cid}/questionnaire")
+
+
+@router.post("/companies/{cid}/questionnaire")
+async def op_save_questionnaire(cid: str, request: Request, db: Session = Depends(get_db)):
+    p = require(request, db, roles={Role.admin, Role.analyst, Role.cs, Role.legal})
+    c = _company_or_404(db, p.user.organization_id, cid)
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    from .client import _apply_questionnaire
+    n = _apply_questionnaire(db, cid, form)
+    record(db, action="questionnaire.save", actor=p.user, target_type="company", target_id=cid,
+           ip=getattr(request.state, "client_ip", ""), answered=n)
+    return redirect(f"/companies/{cid}", "Questionnaire saved.")
+
+
+@router.post("/companies/{cid}/import")
+async def import_customer_data(cid: str, request: Request, db: Session = Depends(get_db)):
+    """Bulk-import collated customer data (TradeIndia-style) and optionally sites."""
+    p = require(request, db, roles={Role.admin, Role.analyst, Role.cs})
+    c = _company_or_404(db, p.user.organization_id, cid)
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    import json
+    raw = (form.get("payload", "") or "").strip()
+    try:
+        data = json.loads(raw) if raw else {}
+        assertions = data.get("assertions", data) if isinstance(data, (dict, list)) else []
+        if isinstance(data, dict) and isinstance(data.get("sites"), list):
+            c.sites = [str(s).strip() for s in data["sites"] if str(s).strip()]
+        if not isinstance(assertions, list):
+            raise ValueError("expected an array of answers, or an object with an 'assertions' array")
+        existing = {a.control_id: a for a in db.execute(select(QuestionnaireAnswer).where(
+            QuestionnaireAnswer.company_id == cid)).scalars()}
+        valid_ids = {ctrl["id"] for ctrl in latest_rulebook(db)["controls"]}
+        imported, skipped = 0, 0
+        for a in assertions:
+            cidx = a.get("controlId")
+            st = str(a.get("status", "")).upper()
+            if cidx not in valid_ids or st not in {"COMPLIANT", "PARTIAL", "GAP", "NA", "TBC"}:
+                skipped += 1
+                continue
+            dept = (a.get("source", {}) or {}).get("department", "") if isinstance(a.get("source"), dict) else ""
+            ev = str(a.get("evidence", ""))
+            if cidx in existing:
+                existing[cidx].status = st
+                existing[cidx].evidence = ev
+                existing[cidx].department = dept
+            else:
+                db.add(QuestionnaireAnswer(company_id=cid, control_id=cidx, status=st,
+                                           evidence=ev, department=dept))
+            imported += 1
+        db.commit()
+        record(db, action="customer.data.import", actor=p.user, target_type="company", target_id=cid,
+               ip=getattr(request.state, "client_ip", ""), imported=imported, skipped=skipped)
+        return redirect(f"/companies/{cid}",
+                        f"Imported {imported} answer(s){', updated sites' if isinstance(data, dict) and data.get('sites') else ''}. "
+                        f"{skipped} skipped. Run the assessment to produce the report.")
+    except (json.JSONDecodeError, ValueError) as ex:
+        return redirect(f"/companies/{cid}", f"Import failed: {ex}", err=True)
+
+
 @router.post("/companies/{cid}/client-login")
 def set_client_login(cid: str, request: Request, email: str = Form(...), csrf: str = Form(""),
                      db: Session = Depends(get_db)):

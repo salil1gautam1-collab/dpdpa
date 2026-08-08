@@ -17,26 +17,57 @@ untouched; the next assessment a company runs uses the latest version. Nothing c
 </table>
 </div>
 
-<h2>Append new checkpoints</h2>
+<h2>Add a checkpoint</h2>
+<p class="small">The simple way — fill the fields, no JSON needed. It's appended to the current rulebook as a new version.</p>
 <div class="card">
-  <p class="small">Paste new control objects (a JSON array). They are appended to the current rulebook as a new
-  version. Each control needs at least <code>id, category, severity, title, checkMethod</code>.</p>
-  <form method="post" action="/admin/rulebook/append">
+  <form method="post" action="/admin/rulebook/add-checkpoint">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label>New version number</label><input type="text" name="version" value="{{ next_version }}">
-    <label>New controls (JSON array)</label>
-    <textarea name="controls" rows="6" placeholder='[{"id":"NT-07","category":"NT","severity":"medium","title":"...","legalRef":"...","description":"...","checkMethod":"questionnaire","remediation":"...","appAssist":{"possible":true,"how":"..."}}]'></textarea>
+    <div class="grid c3">
+      <div><label>Checkpoint ID *</label><input type="text" name="id" placeholder="e.g. NT-07" required></div>
+      <div><label>Category *</label>
+        <select name="category">
+          {% for cat in categories %}<option value="{{ cat.id }}">{{ cat.id }} — {{ cat.name }}</option>{% endfor %}
+        </select></div>
+      <div><label>Severity</label>
+        <select name="severity">{% for s in severities %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select></div>
+    </div>
+    <label>Title *</label><input type="text" name="title" placeholder="Short checkpoint statement" required>
+    <div class="grid c3">
+      <div><label>Legal reference</label><input type="text" name="legalRef" placeholder="e.g. Rule 3(b)"></div>
+      <div><label>How it's checked</label>
+        <select name="checkMethod">{% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></div>
+      <div><label>New version number</label><input type="text" name="version" value="{{ next_version }}"></div>
+    </div>
+    <label>What it requires (description)</label><textarea name="description" rows="2"></textarea>
+    <label>Recommendation / remediation</label><textarea name="remediation" rows="2"></textarea>
+    <label>Evidence required</label><input type="text" name="evidenceRequired">
+    <label style="margin-top:10px"><input type="checkbox" name="appAssist" value="1" style="width:auto"> This tool can assist in closing this gap</label>
+    <label>If so, how</label><input type="text" name="appAssistHow">
     <label>Note (what changed &amp; why)</label><input type="text" name="note">
-    <p style="margin-top:12px"><button class="btn green" type="submit">Append &amp; publish new version</button></p>
+    <p style="margin-top:14px"><button class="btn green" type="submit">Add checkpoint &amp; publish version</button></p>
   </form>
 </div>
 
-<h2>Import a full rulebook</h2>
-<div class="card">
-  <form method="post" action="/admin/rulebook/import">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <textarea name="rulebook" rows="5" placeholder='{"rulebookVersion":"5.0.0","categories":[...],"controls":[...]}'></textarea>
-    <p style="margin-top:12px"><button class="btn" type="submit">Validate &amp; import</button></p>
-  </form>
-</div>
+<details style="margin-top:20px">
+  <summary class="small" style="cursor:pointer"><b>Advanced:</b> bulk append (JSON array) or import a full rulebook</summary>
+  <div class="card">
+    <h3 style="margin-top:0">Append several checkpoints (JSON array)</h3>
+    <form method="post" action="/admin/rulebook/append">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>New version number</label><input type="text" name="version" value="{{ next_version }}">
+      <label>New controls (JSON array)</label>
+      <textarea name="controls" rows="5" placeholder='[{"id":"NT-07","category":"NT","severity":"medium","title":"...","checkMethod":"questionnaire","remediation":"..."}]'></textarea>
+      <label>Note</label><input type="text" name="note">
+      <p style="margin-top:12px"><button class="btn" type="submit">Append &amp; publish</button></p>
+    </form>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">Import a full rulebook (JSON)</h3>
+    <form method="post" action="/admin/rulebook/import">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <textarea name="rulebook" rows="4" placeholder='{"rulebookVersion":"5.0.0","categories":[...],"controls":[...]}'></textarea>
+      <p style="margin-top:12px"><button class="btn" type="submit">Validate &amp; import</button></p>
+    </form>
+  </div>
+</details>
 {% endblock %}

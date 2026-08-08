@@ -28,7 +28,7 @@ def home(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/dashboard", status_code=307)
     if p and p.is_client:
         return RedirectResponse("/workspace", status_code=307)
-    return RedirectResponse("/login", status_code=307)
+    return render(request, "landing.html")
 
 
 @router.get("/login")
