@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Contact{% endblock %}
+{% block body %}
+<div class="section" style="padding-top:34px">
+  <span class="sec-eyebrow">Contact</span>
+  <h2 class="sec">Talk to us</h2>
+  <p class="sub">Whether you want a walkthrough, a readiness assessment, or just a straight answer
+    about where the DPDPA leaves your organisation — write to us.</p>
+
+  <div class="tiles3" style="max-width:820px;margin:0 auto">
+    <div class="ftile span2"><div class="ico-chip">✉️</div><h3>Email</h3>
+      <p style="margin-bottom:12px">The fastest way to reach the engagement team.</p>
+      <a class="btn" href="mailto:{{ contact_email }}?subject=TrackVault%20walkthrough%20request">{{ contact_email }}</a></div>
+    <div class="ftile"><div class="ico-chip">🗓️</div><h3>Book a walkthrough</h3>
+      <p>A 30-minute session: your footprint, the checkpoints that apply to you, and a sample
+      report. No obligation.</p></div>
+    <div class="ftile span2"><div class="ico-chip">🏢</div><h3>Existing customers</h3>
+      <p>Sign in to your portal for reports, notifications and your questionnaire — or reply to any
+      report email and your engagement manager will pick it up.</p></div>
+    <div class="ftile"><div class="ico-chip">🔒</div><h3>A note on what to send</h3>
+      <p>Please don't email credentials or personal data. Access is granted inside the platform,
+      consent-gated and encrypted.</p></div>
+  </div>
+</div>
+{% endblock %}

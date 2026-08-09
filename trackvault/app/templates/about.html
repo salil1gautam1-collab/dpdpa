@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}About us{% endblock %}
+{% block body %}
+<div class="section" style="padding-top:34px">
+  <span class="sec-eyebrow">About {{ brand }}</span>
+  <h2 class="sec">Compliance you can prove, not just claim</h2>
+  <p class="sub">{{ brand }} exists because most organisations facing India's Digital Personal Data
+    Protection Act don't know where they stand — and the deadline doesn't wait.</p>
+
+  <div class="tiles3" style="margin-top:8px">
+    <div class="ftile span2"><div class="ico-chip">🎯</div><h3>What we do</h3>
+      <p>We assess organisations against every checkpoint of the DPDP Act 2023 and the DPDP Rules
+      2025 — combining automated scanning of websites, cloud accounts and endpoints with structured
+      declarations from your teams. The result is a scored, evidence-backed report your board and
+      your regulator can rely on.</p></div>
+    <div class="ftile"><div class="ico-chip">🧭</div><h3>How we work</h3>
+      <p>An engagement team runs every assessment. Automation does the heavy lifting; a person
+      reviews every finding before it reaches you.</p></div>
+    <div class="ftile"><div class="ico-chip">🔍</div><h3>What we are</h3>
+      <p>An assessment and monitoring service. We identify gaps, attach evidence, and recommend
+      remediation with a clear path to close them.</p></div>
+    <div class="ftile span2"><div class="ico-chip">🤝</div><h3>What we are not</h3>
+      <p>We are not the gap fillers, and we are not a law firm. Remediation of your systems happens
+      only where you explicitly grant consent, access and permission — and our reports inform your
+      legal counsel, they don't replace it.</p></div>
+  </div>
+
+  <div class="notice-box" style="margin-top:26px"><b>Our commitment on your data:</b> assessment data
+    stays in your encrypted workspace. Evidence excerpts are masked for personal data. Credentials
+    are encrypted at rest. Access to your systems is read-only and consent-gated, always.</div>
+</div>
+{% endblock %}

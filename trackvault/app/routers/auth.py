@@ -31,6 +31,19 @@ def home(request: Request, db: Session = Depends(get_db)):
     return render(request, "landing.html")
 
 
+@router.get("/about")
+def about(request: Request, db: Session = Depends(get_db)):
+    attach_principal(request, db)
+    return render(request, "about.html")
+
+
+@router.get("/contact")
+def contact(request: Request, db: Session = Depends(get_db)):
+    attach_principal(request, db)
+    from ..services.settings_service import effective_email_config
+    return render(request, "contact.html", contact_email=effective_email_config(db)["from_addr"])
+
+
 @router.get("/login")
 def login_form(request: Request, db: Session = Depends(get_db)):
     attach_principal(request, db)

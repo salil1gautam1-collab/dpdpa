@@ -14,7 +14,7 @@
       rows.forEach(function (r) { r.classList.remove("scanning"); });
       rows[i % rows.length].classList.add("scanning");
       i++;
-    }, 1500);
+    }, 2400);
   }
 
   /* Scroll-reveal: .reveal elements rise in as they enter the viewport. */
