@@ -3,6 +3,10 @@
 {% block body %}
 <h1>Companies</h1>
 <p class="small">Operator dashboard — all engagements for your organisation.</p>
+{% if q %}
+<div class="banner op">🔎 Showing companies matching “<b>{{ q }}</b>” — {{ rows|length }} result(s).
+  <a href="/dashboard">Clear search</a></div>
+{% endif %}
 <div class="overflow">
 <table>
   <tr><th>Company</th><th>Sites</th><th>Consent</th><th>Latest result</th><th></th></tr>

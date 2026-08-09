@@ -203,16 +203,21 @@ RET-01: partial: Retention schedule in draft"></textarea>
 <p class="small">Latest {{ latest.scan_id }} · rulebook v{{ latest.rulebook_version }} · {{ snaps|length }} on file.</p>
 {% if last_run %}<p class="small">✅ <b>Last assessment covered:</b> {{ last_run|join(' · ') }}</p>{% endif %}
 <div class="card" style="margin-top:10px">
-  <h3 style="margin-top:0">✉ Email this report</h3>
-  <p class="small">Send the branded report (attached, ready to save as PDF) to anyone — the client, a colleague, or your own inbox.</p>
+  <h3 style="margin-top:0">✉ Email the documents</h3>
+  <p class="small">Send the branded document(s) — attached, ready to save as PDF — to anyone: the client, a colleague, or your own inbox.</p>
   <form method="post" action="/companies/{{ c.id }}/send-report">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <input type="hidden" name="scan_id" value="{{ latest.scan_id }}">
+    <label>What to attach</label>
+    <label style="font-weight:400;margin:4px 0"><input type="checkbox" name="doc_report" value="1" checked style="width:auto">
+      📕 Executive report — cover, score, summary, findings (for the board)</label>
+    <label style="font-weight:400;margin:4px 0"><input type="checkbox" name="doc_gaps" value="1" style="width:auto">
+      🔍 Gap assessment — full gap register with owner/target-date columns (for the team doing the work)</label>
     <label>Recipient email</label>
     <input type="email" name="to_email" placeholder="name@company.com" required style="max-width:360px">
     <label>Optional note (added to the email)</label>
     <input type="text" name="note" placeholder="e.g. Attached is your Q3 assessment.">
-    <p style="margin-top:12px"><button class="btn" type="submit">Send report by email</button></p>
+    <p style="margin-top:12px"><button class="btn" type="submit">Send by email</button></p>
   </form>
 </div>
 {% else %}

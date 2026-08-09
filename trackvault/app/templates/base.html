@@ -14,6 +14,10 @@
     <span class="navlinks">
       {% if user %}
         {% if principal.is_operator %}
+          <form action="/dashboard" method="get" class="inline">
+            <input type="search" name="q" class="navsearch" placeholder="🔎 Find company…"
+                   value="{{ request.query_params.get('q', '') }}">
+          </form>
           <a href="/dashboard">Companies</a>
           {% if user.role.value in ['admin','cs','legal'] %}<a href="/admin/rulebook">Rulebook</a>{% endif %}
           {% if user.role.value == 'admin' %}<a href="/admin/users">Users</a><a href="/admin/audit">Audit</a><a href="/admin/settings">Settings</a>{% endif %}

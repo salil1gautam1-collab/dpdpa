@@ -25,8 +25,9 @@ def smtp_configured(cfg: dict | None = None) -> bool:
 
 
 def _send_email(to: str, subject: str, body: str, attachment: tuple | None = None,
-                cfg: dict | None = None) -> tuple[str, str]:
-    """attachment = (filename, bytes, mime_subtype). cfg from settings_service or env."""
+                cfg: dict | None = None, attachments: list | None = None) -> tuple[str, str]:
+    """attachment = (filename, bytes, mime_subtype); attachments = a list of the
+    same tuples for multi-document sends. cfg from settings_service or env."""
     cfg = cfg or _env_cfg()
     if not cfg.get("enabled", True):
         return "disabled", ""
@@ -46,8 +47,7 @@ def _send_email(to: str, subject: str, body: str, attachment: tuple | None = Non
         msg["To"] = actual
         msg["Subject"] = subject
         msg.set_content(body)
-        if attachment:
-            fname, data, subtype = attachment
+        for fname, data, subtype in ([attachment] if attachment else []) + (attachments or []):
             msg.add_attachment(data, maintype="text", subtype=subtype, filename=fname)
         with smtplib.SMTP(cfg["host"], int(cfg["port"]), timeout=30) as srv:
             srv.starttls(context=ssl.create_default_context())
@@ -59,29 +59,41 @@ def _send_email(to: str, subject: str, body: str, attachment: tuple | None = Non
         return f"error: {type(ex).__name__}", actual
 
 
-def send_report_email(db: Session, company, snapshot, to_email: str, note: str = "") -> Notification:
-    """Email the branded report as an attachment, and log it as a notification."""
-    from ..reporting import client_report
+def send_report_email(db: Session, company, snapshot, to_email: str, note: str = "",
+                      docs: tuple = ("report",)) -> Notification:
+    """Email the chosen document(s) — executive report and/or gap assessment —
+    as attachments, and log it as a notification."""
+    from ..reporting import client_report, gap_assessment
     from ..services.rulebook_service import get_rulebook
     from ..domain.engine import summarize
     rb = get_rulebook(db, snapshot.rulebook_version)
-    html = client_report(snapshot.data, rb, list(company.sites or []))
+    sites = list(company.sites or [])
     s = summarize(snapshot.data)
     d = snapshot.scan_id
     date_fmt = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
-    body = (f"Please find attached the DPDPA compliance report for {company.name}, dated {date_fmt}.\n\n"
+    attachments, names = [], []
+    if "report" in docs:
+        attachments.append((f"DPDPA-Report-{company.slug}-{date_fmt}.html",
+                            client_report(snapshot.data, rb, sites).encode("utf-8"), "html"))
+        names.append("the compliance report")
+    if "gaps" in docs:
+        attachments.append((f"DPDPA-Gap-Assessment-{company.slug}-{date_fmt}.html",
+                            gap_assessment(snapshot.data, rb, sites).encode("utf-8"), "html"))
+        names.append("the gap assessment (working document)")
+    what = " and ".join(names) or "the compliance report"
+    body = (f"Please find attached {what} for {company.name}, dated {date_fmt}.\n\n"
             f"Overall compliance score: {s['complianceScore']}%  "
             f"(gaps {s['counts']['GAP']}, partial {s['counts']['PARTIAL']}).\n")
     if note:
         body += f"\n{note}\n"
-    body += f"\nOpen the attached file in a browser and use Print → Save as PDF for a PDF copy.\n"
-    fname = f"DPDPA-Report-{company.slug}-{date_fmt}.html"
+    body += f"\nOpen an attached file in a browser and use Print → Save as PDF for a PDF copy.\n"
     from .settings_service import effective_email_config
-    status, actual = _send_email(to_email, f"DPDPA Compliance Report — {company.name} ({date_fmt})",
-                                 body, attachment=(fname, html.encode("utf-8"), "html"),
+    status, actual = _send_email(to_email, f"DPDPA Compliance Documents — {company.name} ({date_fmt})",
+                                 body, attachments=attachments,
                                  cfg=effective_email_config(db))
+    doc_label = " + ".join(n_.replace("the ", "") for n_ in names) or "report"
     n = Notification(company_id=company.id, ntype="REPORT SENT",
-                     title=f"Report emailed to {to_email} ({date_fmt})", body=body,
+                     title=f"Emailed {doc_label} to {to_email} ({date_fmt})", body=body,
                      email_to=to_email, email_status=status, email_delivered_to=actual)
     db.add(n)
     db.commit()

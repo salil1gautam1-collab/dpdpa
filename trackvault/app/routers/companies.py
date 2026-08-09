@@ -39,14 +39,17 @@ def _company_or_404(db: Session, org_id: str, cid: str) -> Company:
 @router.get("/dashboard")
 def dashboard(request: Request, db: Session = Depends(get_db)):
     p = require(request, db, operator=True)
-    companies = list(db.execute(select(Company).where(
-        Company.organization_id == p.user.organization_id).order_by(Company.name)).scalars())
+    q = (request.query_params.get("q") or "").strip()
+    stmt = select(Company).where(Company.organization_id == p.user.organization_id)
+    if q:
+        stmt = stmt.where(Company.name.ilike(f"%{q}%"))
+    companies = list(db.execute(stmt.order_by(Company.name)).scalars())
     rows = []
     for c in companies:
         latest = db.execute(select(Snapshot).where(Snapshot.company_id == c.id)
                             .order_by(Snapshot.scan_id.desc())).scalars().first()
         rows.append({"c": c, "latest": latest})
-    return render(request, "dashboard.html", rows=rows)
+    return render(request, "dashboard.html", rows=rows, q=q)
 
 
 @router.post("/companies")
@@ -163,10 +166,16 @@ def assess_status(cid: str, jid: str, request: Request, db: Session = Depends(ge
 
 @router.post("/companies/{cid}/send-report")
 def send_report(cid: str, request: Request, to_email: str = Form(...), scan_id: str = Form(""),
-                note: str = Form(""), csrf: str = Form(""), db: Session = Depends(get_db)):
+                note: str = Form(""), csrf: str = Form(""),
+                doc_report: str = Form(""), doc_gaps: str = Form(""),
+                db: Session = Depends(get_db)):
     p = require(request, db, roles={Role.admin, Role.analyst, Role.cs, Role.legal})
     c = _company_or_404(db, p.user.organization_id, cid)
     check_csrf(p, csrf)
+    docs = tuple(d for d, on in (("report", doc_report), ("gaps", doc_gaps)) if on)
+    if not docs:
+        return redirect(f"/companies/{cid}", "Pick at least one document to attach "
+                        "(report and/or gap assessment).", err=True)
     q = select(Snapshot).where(Snapshot.company_id == cid)
     snap = (db.execute(q.where(Snapshot.scan_id == scan_id)).scalar_one_or_none() if scan_id
             else db.execute(q.order_by(Snapshot.scan_id.desc())).scalars().first())
@@ -176,7 +185,7 @@ def send_report(cid: str, request: Request, to_email: str = Form(...), scan_id: 
     if "@" not in to:
         return redirect(f"/companies/{cid}", "Enter a valid recipient email.", err=True)
     from ..services.notify_service import send_report_email
-    n = send_report_email(db, c, snap, to, note.strip())
+    n = send_report_email(db, c, snap, to, note.strip(), docs=docs)
     record(db, action="report.email", actor=p.user, target_type="company", target_id=cid,
            ip=getattr(request.state, "client_ip", ""), to=to, status=n.email_status)
     if n.email_status == "sent":

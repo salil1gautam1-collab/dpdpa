@@ -116,7 +116,7 @@ independently verified — and reduces the manual effort required.</p>"""
 
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <title>DPDPA Compliance Assessment — {_e(snap['client'])}</title><style>{_CSS}</style></head><body>
-<div class="toolbar"><span>{_e(brand)} · Client report</span><button onclick="window.print()">⭳ Save as PDF</button></div>
+<div class="toolbar"><span>{_e(brand)} · Client report</span><button id="printBtn">⭳ Save as PDF</button></div>
 <div class="sheet">
 <div class="cover"><div class="kicker">DPDPA Compliance Assessment</div>
 <h1>DPDPA Compliance Assessment</h1><div class="client">{_e(snap['client'])}</div>
@@ -139,7 +139,7 @@ independently verified — and reduces the manual effort required.</p>"""
 <p>Gaps and partial items first, each with evidence and a recommendation.</p>{''.join(cards)}
 {tbc_tbl}{na_tbl}
 <div class="disc pagebreak"><b>Disclaimer.</b> {_e(DISCLAIMER)}</div>
-</div></body></html>"""
+</div><script src="/static/report.js"></script></body></html>"""
 
 
 def gap_assessment(snap: dict, rulebook: dict, sites: list) -> str:
@@ -215,7 +215,7 @@ def gap_assessment(snap: dict, rulebook: dict, sites: list) -> str:
 
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <title>DPDPA Gap Assessment — {_e(snap['client'])}</title><style>{_CSS}</style></head><body>
-<div class="toolbar"><span>{_e(brand)} · Gap assessment (working document)</span><button onclick="window.print()">⭳ Save as PDF</button></div>
+<div class="toolbar"><span>{_e(brand)} · Gap assessment (working document)</span><button id="printBtn">⭳ Save as PDF</button></div>
 <div class="sheet">
 <div style="border-top:8px solid #0d2137;padding-top:26px;margin-bottom:8px">
 <div class="kicker">DPDPA Gap Assessment &amp; Discovery</div>
@@ -233,4 +233,4 @@ The executive report is the companion for the board.</p></div>
 {register(partials, "3. Partial implementations", "Arrangements that exist but are incomplete. Usually the fastest score gains.")}
 {tbc_html}
 <div class="disc pagebreak"><b>Disclaimer.</b> {_e(DISCLAIMER)}</div>
-</div></body></html>"""
+</div><script src="/static/report.js"></script></body></html>"""
