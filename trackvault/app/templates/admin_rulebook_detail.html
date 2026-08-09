@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Rulebook v{{ book.version }}{% endblock %}
+{% block body %}
+<p class="small"><a href="/admin/rulebook">← All rulebook versions</a></p>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+  <div>
+    <h1>DPDPA rulebook v{{ book.version }}
+      {% if is_current %}<span class="badge b-COMPLIANT">current</span>
+      {% else %}<span class="badge b-NA">historical</span>{% endif %}</h1>
+    <p class="small" style="margin:0">{{ rb.controls|length }} controls ·
+      {{ rb.categories|length }} sections · updated {{ rb.get('lastUpdated','?') }} ·
+      source: {{ book.source }}{% if book.imported_by %} by {{ book.imported_by }}{% endif %}
+      {% if rb.get('updateNote') %}<br><i>{{ rb.updateNote }}</i>{% endif %}</p>
+  </div>
+  <div class="rowbtns">
+    <a class="btn" href="/admin/rulebook/{{ book.version }}/export.xlsx">⬇ Export for study (Excel)</a>
+    <a class="btn gray" href="/admin/rulebook/{{ book.version }}/export.json">⬇ JSON</a>
+  </div>
+</div>
+<p class="small">The Excel export has one row per control with a <b>Review notes</b> column —
+made for counsel to verify each control against the DPDP Act 2023 and Rules 2025. Propose
+changes back through <a href="/admin/rulebook">Rulebook → add checkpoint / import</a>; every
+change becomes a new version, and nothing changes silently.</p>
+
+{% for cat_id, controls in grouped.items() %}
+<h2>{{ cat_id }} — {{ cats.get(cat_id, cat_id) }} <span class="small">({{ controls|length }})</span></h2>
+<div class="overflow">
+<table>
+  <tr><th style="width:80px">ID</th><th style="width:24%">Checkpoint</th>
+      <th style="width:90px">Severity</th><th style="width:110px">Legal ref</th>
+      <th style="width:110px">Checked how</th><th>What it requires &amp; how to fix</th></tr>
+  {% for c in controls %}
+  <tr>
+    <td class="tag">{{ c.id }}</td>
+    <td><b>{{ c.title }}</b></td>
+    <td><span class="badge {{ 'b-GAP' if c.severity == 'critical' else 'b-PARTIAL' if c.severity == 'high' else 'b-TBC' if c.severity == 'medium' else 'b-NA' }}">{{ c.severity }}</span></td>
+    <td class="small">{{ c.legalRef or '—' }}</td>
+    <td class="small">{{ c.checkMethod }}</td>
+    <td class="small">{{ c.description }}
+      {% if c.evidenceRequired %}<br><b>Evidence:</b> {{ c.evidenceRequired }}{% endif %}
+      {% if c.remediation %}<br><b>Remediation:</b> {{ c.remediation }}{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endfor %}
+{% endblock %}

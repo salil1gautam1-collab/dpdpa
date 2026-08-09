@@ -85,7 +85,7 @@ def rulebook_page(request: Request, db: Session = Depends(get_db)):
             return "5.0.0"
     cats = current.data.get("categories", []) if current else []
     from ..models import RegWatchItem
-    from ..services.reg_watch import get_sources, last_check
+    from ..services.reg_watch import get_sources, last_check, last_result
     watch_items = list(db.execute(select(RegWatchItem)
                                   .order_by(RegWatchItem.status.desc(), RegWatchItem.first_seen.desc())
                                   .limit(30)).scalars())
@@ -95,7 +95,59 @@ def rulebook_page(request: Request, db: Session = Depends(get_db)):
                   categories=cats, severities=["critical", "high", "medium", "low"],
                   methods=["questionnaire", "evidence", "hybrid", "web"],
                   watch_items=watch_items, watch_new=watch_new,
-                  watch_sources=get_sources(db), watch_last=last_check(db))
+                  watch_sources=get_sources(db), watch_last=last_check(db),
+                  watch_result=last_result(db))
+
+
+@router.get("/admin/rulebook/{version}")
+def rulebook_detail(version: str, request: Request, db: Session = Depends(get_db)):
+    """Read the law as the engine sees it: every control of one rulebook version,
+    grouped by section — for CS/Legal to study and double-check."""
+    p = require(request, db, roles=RULEBOOK_ROLES)
+    book = db.execute(select(Rulebook).where(Rulebook.version == version)).scalar_one_or_none()
+    if not book:
+        raise HTTPException(404, "Rulebook version not found")
+    rb = book.data
+    cats = {c["id"]: c["name"] for c in rb.get("categories", [])}
+    grouped: dict = {}
+    for c in sorted(rb.get("controls", []), key=lambda x: (x.get("category", ""), x.get("id", ""))):
+        grouped.setdefault(c.get("category", "?"), []).append(c)
+    latest = all_rulebooks(db)[-1]
+    return render(request, "admin_rulebook_detail.html", book=book, rb=rb, cats=cats,
+                  grouped=grouped, is_current=(book.version == latest.version))
+
+
+@router.get("/admin/rulebook/{version}/export.xlsx")
+def rulebook_export_xlsx(version: str, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import Response
+    from ..config import get_settings
+    from ..services.rulebook_service import build_rulebook_workbook
+    p = require(request, db, roles=RULEBOOK_ROLES)
+    book = db.execute(select(Rulebook).where(Rulebook.version == version)).scalar_one_or_none()
+    if not book:
+        raise HTTPException(404, "Rulebook version not found")
+    data = build_rulebook_workbook(book.data, get_settings().brand)
+    record(db, action="rulebook.export", actor=p.user, target_type="rulebook", target_id=version,
+           ip=getattr(request.state, "client_ip", ""), fmt="xlsx")
+    return Response(content=data,
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="DPDPA-Rulebook-v{version}.xlsx"'})
+
+
+@router.get("/admin/rulebook/{version}/export.json")
+def rulebook_export_json(version: str, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import Response
+    p = require(request, db, roles=RULEBOOK_ROLES)
+    book = db.execute(select(Rulebook).where(Rulebook.version == version)).scalar_one_or_none()
+    if not book:
+        raise HTTPException(404, "Rulebook version not found")
+    record(db, action="rulebook.export", actor=p.user, target_type="rulebook", target_id=version,
+           ip=getattr(request.state, "client_ip", ""), fmt="json")
+    return Response(content=json.dumps(book.data, indent=1, ensure_ascii=False),
+                    media_type="application/json",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="DPDPA-Rulebook-v{version}.json"'})
 
 
 @router.post("/admin/regwatch/check")

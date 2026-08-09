@@ -16,15 +16,25 @@ untouched; the next assessment a company runs uses the latest version. Nothing c
   </div>
   <p class="small">The app watches the configured official pages (MeitY etc.) for documents mentioning the
     DPDP framework and lists anything new here. Detection is automated; <b>judgment stays human</b> — read the
-    document, and if the law moved, publish a new rulebook version below. Last check: <b>{{ watch_last }}</b>.
+    document, and if the law moved, publish a new rulebook version below.
     Sources are managed in <a href="/admin/settings">Settings</a>.</p>
+  {% if watch_last != 'never' %}
+  <p class="small" style="margin-top:4px">
+    {% if watch_new %}<b style="color:var(--warn)">⚠ {{ watch_new }} item(s) awaiting review.</b>
+    {% elif watch_result.startswith('0 new') %}<b style="color:var(--ok)">✅ Up to date</b> — nothing new on the
+    official sources as of the last check.
+    {% endif %}
+    Last check: <b>{{ watch_last }}</b>{% if watch_result %} ({{ watch_result }}){% endif %}.</p>
+  {% else %}
+  <p class="small" style="margin-top:4px">No check has run yet.</p>
+  {% endif %}
   {% if watch_items %}
   <div class="overflow"><table>
     <tr><th>First seen</th><th>Document</th><th>Source</th><th style="width:120px"></th></tr>
     {% for i in watch_items %}
     <tr>
       <td class="tag">{{ i.first_seen.strftime('%Y-%m-%d') }}</td>
-      <td class="small"><a href="{{ i.url }}" target="_blank" rel="noopener noreferrer">{{ i.title }}</a>
+      <td class="small"><a href="{{ i.url }}" rel="noopener noreferrer">{{ i.title }}</a>
         {% if i.status == 'reviewed' %}<br><span class="small">reviewed by {{ i.reviewed_by }}</span>{% endif %}</td>
       <td class="small">{{ i.source | replace('https://','') | truncate(34) }}</td>
       <td>{% if i.status == 'new' %}
@@ -41,12 +51,14 @@ untouched; the next assessment a company runs uses the latest version. Nothing c
 </div>
 <div class="overflow">
 <table>
-  <tr><th>Version</th><th>Controls</th><th>Categories</th><th>Updated</th><th>Source</th></tr>
+  <tr><th>Version</th><th>Controls</th><th>Categories</th><th>Updated</th><th>Source</th><th>Study</th></tr>
   {% for rb in books %}
   <tr>
-    <td><b>v{{ rb.version }}</b>{% if current and rb.version == current.version %} · current{% endif %}</td>
+    <td><a href="/admin/rulebook/{{ rb.version }}"><b>v{{ rb.version }}</b></a>{% if current and rb.version == current.version %} · current{% endif %}</td>
     <td>{{ rb.data.controls|length }}</td><td>{{ rb.data.categories|length }}</td>
     <td class="small">{{ rb.data.get('lastUpdated','') }}</td><td class="small">{{ rb.source }}</td>
+    <td class="small"><a href="/admin/rulebook/{{ rb.version }}">view</a> ·
+      <a href="/admin/rulebook/{{ rb.version }}/export.xlsx">Excel</a></td>
   </tr>
   {% endfor %}
 </table>

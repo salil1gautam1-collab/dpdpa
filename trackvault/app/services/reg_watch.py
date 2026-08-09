@@ -83,9 +83,15 @@ def check_now(db: Session) -> dict:
             errors.append(f"{src} — {type(ex).__name__}")
     db.commit()
     set_raw(db, "reg_last_check", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+    set_raw(db, "reg_last_result", f"{len(new_items)} new" + (f", {len(errors)} source error(s)" if errors else ""))
     return {"new": len(new_items), "titles": new_items[:10], "errors": errors}
 
 
 def last_check(db: Session) -> str:
     from .settings_service import get_raw
     return get_raw(db, "reg_last_check") or "never"
+
+
+def last_result(db: Session) -> str:
+    from .settings_service import get_raw
+    return get_raw(db, "reg_last_result") or ""
