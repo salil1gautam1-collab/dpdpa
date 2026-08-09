@@ -45,7 +45,8 @@
   {% if user.role.value in ['admin','analyst'] %}
   <form method="post" action="/companies/{{ c.id }}/scan" class="inline">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button class="btn green" {{ 'disabled' if c.sites and not (c.scan_consent and c.scan_consent.granted) }}>▶ Run full assessment</button>
+    <button class="btn green" {% if c.sites and not (c.scan_consent and c.scan_consent.granted) %}disabled
+      title="Record the website-scan authorisation above first — or use Run without website scan"{% endif %}>▶ Run full assessment</button>
   </form>
   {% if c.sites %}
   <form method="post" action="/companies/{{ c.id }}/scan" class="inline">
