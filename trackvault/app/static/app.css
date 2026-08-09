@@ -1,24 +1,33 @@
 /* ============================================================================
-   TrackVault theme system — enterprise surface model.
-   Semantic CSS variables; DARK is the default (:root). Alternative themes
-   override variables only, via [data-theme] on <html> (set server-side from
-   the admin Appearance setting).
+   TrackVault theme system — evidence-based palette.
+   Every text/surface pair verified against WCAG 2.1 (body AAA >=7:1, secondary
+   text AA >=4.5:1, graphics >=3:1) — see scripts in repo history.
+   Principles applied: dark surfaces are blue-grey, never pure black (halation);
+   accents are desaturated/lightened on dark grounds (vibration); status is
+   encoded as tinted chips with the word, never hue alone (color-blind safe).
    Surfaces: --bg (page) -> --bg2 (section band) -> --card (raised surface).
+   DARK is the default (:root); themes override tokens via [data-theme].
    ============================================================================ */
 :root,:root[data-theme="dark"]{
   color-scheme:dark;
   --navy:#0b2036;--navy2:#14324f;
-  --bg:#0e141b;--bg2:#121a23;--card:#161f2a;--ink:#e7edf3;--mut:#8fa1b3;--line:#243141;
-  --navbg:#0a1017;--navtx:#eef3f8;--who:#8ea3b8;
-  --acc:#4c8dff;--acc-ink:#fff;--acc-soft:#4c8dff22;
-  --input-bg:#101923;--field-border:#314357;--th-bg:#1a2532;--track:#243141;
+  --bg:#0d1117;--bg2:#11171f;--card:#161d26;--ink:#e6edf3;--mut:#9baab9;--line:#2a3646;
+  --navbg:#0a0f16;--navtx:#eef3f8;--who:#8ea3b8;
+  --acc:#58a6ff;--acc-strong:#2f6fde;--acc-ink:#fff;--acc-soft:#58a6ff26;
+  --input-bg:#10161e;--field-border:#314357;--th-bg:#1a222d;--track:#243141;
   --disabled:#33455680;
-  --ok:#2ea043;--warn:#d1a132;--bad:#e5534b;--na:#7d94a6;--tbc:#7c88e0;
+  --ok:#1a7f37;--warn:#d4a72c;--bad:#c93c37;--na:#57707f;--tbc:#5560c8;
+  --score-good:#3fb950;--score-mid:#d4a72c;--score-low:#f85149;
+  --st-ok-bg:#173b27;--st-ok-tx:#7ee2a8;
+  --st-warn-bg:#3d3117;--st-warn-tx:#efd07e;
+  --st-gap-bg:#46201f;--st-gap-tx:#ffa8a0;
+  --st-na-bg:#26313c;--st-na-tx:#b9cbdb;
+  --st-tbc-bg:#252b4e;--st-tbc-tx:#bcc5f5;
   --info-bg:#12283f;--info-bd:#274b73;
   --err-bg:#3a1c1f;--err-bd:#7a3b3f;
   --notice-bg:#2b2614;--notice-bd:#554d22;--notice-tx:#e6d79f;
   --op-bg:#19242f;--op-bd:#2e3f52;
-  --ftile-bg:#161f2a;
+  --ftile-bg:#161d26;
   --hero:radial-gradient(1100px 500px at 85% -10%, #1b4a7a55 0%, transparent 60%),
          linear-gradient(160deg,#0c1d31 0%,#0f2a47 55%,#0d3a5c 100%);
   --shadow-sm:0 1px 2px rgba(0,0,0,.35);
@@ -28,12 +37,18 @@
 :root[data-theme="light"]{
   color-scheme:light;
   --navy:#0d2137;--navy2:#14324f;
-  --bg:#f6f8fa;--bg2:#eef2f6;--card:#ffffff;--ink:#1c2733;--mut:#5b7186;--line:#dde5ed;
+  --bg:#f6f8fa;--bg2:#edf1f6;--card:#ffffff;--ink:#0f1b2a;--mut:#5a6b7e;--line:#dde5ed;
   --navbg:#0d2137;--navtx:#ffffff;--who:#9fb3c8;
-  --acc:#0d6efd;--acc-ink:#fff;--acc-soft:#0d6efd14;
+  --acc:#1d63d8;--acc-strong:#1d63d8;--acc-ink:#fff;--acc-soft:#1d63d814;
   --input-bg:#ffffff;--field-border:#b9c6d2;--th-bg:#eef2f6;--track:#e3e9ef;
   --disabled:#9db2c5;
-  --ok:#1a7f37;--warn:#b58900;--bad:#c62828;--na:#607d8b;--tbc:#5c6bc0;
+  --ok:#1a7f37;--warn:#8f6400;--bad:#c13333;--na:#57707f;--tbc:#5560c8;
+  --score-good:#1a7f37;--score-mid:#8f6400;--score-low:#c13333;
+  --st-ok-bg:#d8f5e1;--st-ok-tx:#0e6329;
+  --st-warn-bg:#fbeec2;--st-warn-tx:#6b4e00;
+  --st-gap-bg:#fbe2e0;--st-gap-tx:#a11a28;
+  --st-na-bg:#e2eaf1;--st-na-tx:#3e5568;
+  --st-tbc-bg:#e4e7fb;--st-tbc-tx:#3a47a8;
   --info-bg:#e7f1ff;--info-bd:#9ec5fe;
   --err-bg:#fdecea;--err-bd:#f5c6cb;
   --notice-bg:#fff8e6;--notice-bd:#e6d9a8;--notice-tx:#5c4d1e;
@@ -48,12 +63,18 @@
 :root[data-theme="midnight"]{
   color-scheme:dark;
   --navy:#081426;--navy2:#0f2740;
-  --bg:#091220;--bg2:#0d1828;--card:#111f34;--ink:#e8eef7;--mut:#8ba0bd;--line:#20334e;
+  --bg:#091220;--bg2:#0d1828;--card:#111f34;--ink:#e8eef7;--mut:#94a8c4;--line:#20334e;
   --navbg:#060e1a;--navtx:#eaf1fb;--who:#7f95b3;
-  --acc:#37b6f0;--acc-ink:#04141f;--acc-soft:#37b6f022;
+  --acc:#4fc1f5;--acc-strong:#4fc1f5;--acc-ink:#04141f;--acc-soft:#4fc1f522;
   --input-bg:#0b1a2e;--field-border:#2c4666;--th-bg:#152845;--track:#20334e;
   --disabled:#2b425e80;
-  --ok:#2ea043;--warn:#d9ad3c;--bad:#e5675f;--na:#7690ab;--tbc:#6f9be6;
+  --ok:#1a7f37;--warn:#d9ad3c;--bad:#c93c37;--na:#57707f;--tbc:#5560c8;
+  --score-good:#3fb950;--score-mid:#d9ad3c;--score-low:#f85149;
+  --st-ok-bg:#14331f;--st-ok-tx:#7ee2a8;
+  --st-warn-bg:#3a3115;--st-warn-tx:#efd07e;
+  --st-gap-bg:#421d1c;--st-gap-tx:#ffa8a0;
+  --st-na-bg:#223243;--st-na-tx:#b9cbdb;
+  --st-tbc-bg:#222a52;--st-tbc-tx:#bcc5f5;
   --info-bg:#0f2a44;--info-bd:#255083;
   --err-bg:#331b24;--err-bd:#6f3a44;
   --notice-bg:#26271a;--notice-bd:#4f5230;--notice-tx:#e2d69c;
@@ -103,7 +124,7 @@ padding:12px 16px;text-align:center;box-shadow:var(--shadow-sm)}
 .stat .n{font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 
 /* ---- buttons ---- */
-.btn{display:inline-block;background:var(--acc);color:var(--acc-ink)!important;border:0;
+.btn{display:inline-block;background:var(--acc-strong);color:var(--acc-ink)!important;border:0;
 border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;
 text-decoration:none!important;transition:filter .15s,transform .05s;box-shadow:var(--shadow-sm)}
 .btn:hover{filter:brightness(1.08)}
@@ -143,14 +164,18 @@ padding:11px 15px;margin:14px 0;font-size:14px;color:var(--ink)}
 .notice-box{background:var(--notice-bg);border:1px solid var(--notice-bd);border-radius:12px;
 padding:16px 20px;font-size:13.5px;color:var(--notice-tx)}
 
-/* ---- badges & pills ---- */
-.badge{display:inline-block;padding:2px 10px;border-radius:12px;color:#fff;font-size:12px;font-weight:600;
+/* ---- status chips: tinted ground + strong text + the word itself.
+       Verified >=4.5:1 in every theme; never hue-only (color-blind safe). ---- */
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;
 letter-spacing:.01em}
-.b-COMPLIANT{background:var(--ok)}.b-PARTIAL{background:var(--warn)}.b-GAP{background:var(--bad)}
-.b-NA{background:var(--na)}.b-TBC{background:var(--tbc)}
+.b-COMPLIANT{background:var(--st-ok-bg);color:var(--st-ok-tx)}
+.b-PARTIAL{background:var(--st-warn-bg);color:var(--st-warn-tx)}
+.b-GAP{background:var(--st-gap-bg);color:var(--st-gap-tx)}
+.b-NA{background:var(--st-na-bg);color:var(--st-na-tx)}
+.b-TBC{background:var(--st-tbc-bg);color:var(--st-tbc-tx)}
 .pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.04em}
 .pill.admin{background:var(--acc-soft);color:var(--acc)}
-.pill.alert{background:var(--err-bg);color:var(--bad);border:1px solid var(--err-bd)}
+.pill.alert{background:var(--st-gap-bg);color:var(--st-gap-tx)}
 
 /* ---- score donut ---- */
 .donut{width:120px;height:120px;border-radius:50%;flex:none;

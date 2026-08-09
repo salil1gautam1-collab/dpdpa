@@ -6,7 +6,7 @@
 <div class="grid c3">
   <div class="stat"><div class="small">Report A · {{ sa.scan_id }}</div><div class="n">{{ score_a }}%</div></div>
   <div class="stat"><div class="small">Report B · {{ sb.scan_id }}</div><div class="n">{{ score_b }}%</div></div>
-  {% set dc = '#1a7f37' if delta > 0 else '#c62828' if delta < 0 else '#607d8b' %}
+  {% set dc = 'var(--score-good)' if delta > 0 else 'var(--score-low)' if delta < 0 else 'var(--na)' %}
   <div class="stat"><div class="small">Change</div><div class="n" style="color:{{ dc }}">{{ '+' if delta > 0 else '' }}{{ delta }}%</div></div>
 </div>
 

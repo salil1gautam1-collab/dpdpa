@@ -11,7 +11,7 @@
 <div class="flexh">
   <div style="flex:1;min-width:240px"><p class="small">{{ c.sites|join(', ') if c.sites else 'Questionnaire &amp; infrastructure assessment' }}</p></div>
   {% if latest %}
-  {% set col = '#1a7f37' if latest.score >= 80 else '#b58900' if latest.score >= 50 else '#c62828' %}
+  {% set col = 'var(--score-good)' if latest.score >= 80 else 'var(--score-mid)' if latest.score >= 50 else 'var(--score-low)' %}
   <div class="donut" style="--p:{{ latest.score }};--dc:{{ col }}"><div>{{ latest.score }}%</div></div>
   {% endif %}
 </div>
