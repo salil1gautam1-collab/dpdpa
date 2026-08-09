@@ -4,11 +4,23 @@
 (function () {
   "use strict";
 
+  var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Live-panel sweep: highlight assessment rows in sequence, like a scan. */
+  var rows = document.querySelectorAll(".ops-row");
+  if (rows.length && !reduced) {
+    var i = 0;
+    setInterval(function () {
+      rows.forEach(function (r) { r.classList.remove("scanning"); });
+      rows[i % rows.length].classList.add("scanning");
+      i++;
+    }, 1500);
+  }
+
   /* Scroll-reveal: .reveal elements rise in as they enter the viewport. */
   var els = document.querySelectorAll(".reveal");
   if (!els.length) return;
-  if (!("IntersectionObserver" in window) ||
-      matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (!("IntersectionObserver" in window) || reduced) {
     els.forEach(function (e) { e.classList.add("in"); });
     return;
   }

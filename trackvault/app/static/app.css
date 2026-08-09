@@ -8,12 +8,41 @@
    Surfaces: --bg (page) -> --bg2 (section band) -> --card (raised surface).
    DARK is the default (:root); themes override tokens via [data-theme].
    ============================================================================ */
-:root,:root[data-theme="dark"]{
+:root,:root[data-theme="sentinel"]{
+  color-scheme:dark;
+  --navy:#07130d;--navy2:#0c241a;
+  --bg:#05090d;--bg2:#081018;--card:#0d1520;--ink:#e6f2ea;--mut:#93aba0;--line:#1e2d33;
+  --navbg:#04070b;--navtx:#e9f4ed;--who:#84a293;
+  --acc:#2adf8f;--acc-strong:#2adf8f;--acc-ink:#03140b;--acc-soft:#2adf8f1f;
+  --grad:linear-gradient(92deg,#2adf8f 0%,#7ee2c0 55%,#58d4ff 100%);
+  --input-bg:#0a111a;--field-border:#2b4148;--th-bg:#101b23;--track:#1e2d33;
+  --disabled:#2e454b80;
+  --ok:#1a7f37;--warn:#d4a72c;--bad:#c93c37;--na:#57707f;--tbc:#5560c8;
+  --score-good:#2adf8f;--score-mid:#d4a72c;--score-low:#f85149;
+  --st-ok-bg:#0d2b1b;--st-ok-tx:#5fe3a4;
+  --st-warn-bg:#3d3117;--st-warn-tx:#efd07e;
+  --st-gap-bg:#46201f;--st-gap-tx:#ffa8a0;
+  --st-na-bg:#26313c;--st-na-tx:#b9cbdb;
+  --st-tbc-bg:#252b4e;--st-tbc-tx:#bcc5f5;
+  --info-bg:#0c2233;--info-bd:#1f4a63;
+  --err-bg:#3a1c1f;--err-bd:#7a3b3f;
+  --notice-bg:#2b2614;--notice-bd:#554d22;--notice-tx:#e6d79f;
+  --op-bg:#0f1c22;--op-bd:#26404a;
+  --ftile-bg:#0d1520;
+  --hero:radial-gradient(1100px 500px at 85% -10%, #2adf8f14 0%, transparent 60%),
+         radial-gradient(700px 340px at 12% 115%, #16b87a17 0%, transparent 62%),
+         linear-gradient(165deg,#04120c 0%,#07211a 55%,#08312a 100%);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow-md:0 6px 24px -8px rgba(0,0,0,.55);
+  --r:10px;
+}
+:root[data-theme="dark"]{
   color-scheme:dark;
   --navy:#0b2036;--navy2:#14324f;
   --bg:#0d1117;--bg2:#11171f;--card:#161d26;--ink:#e6edf3;--mut:#9baab9;--line:#2a3646;
   --navbg:#0a0f16;--navtx:#eef3f8;--who:#8ea3b8;
   --acc:#58a6ff;--acc-strong:#2f6fde;--acc-ink:#fff;--acc-soft:#58a6ff26;
+  --grad:linear-gradient(92deg,#58a6ff 0%,#7ee2ff 55%,#a5b8ff 100%);
   --input-bg:#10161e;--field-border:#314357;--th-bg:#1a222d;--track:#243141;
   --disabled:#33455680;
   --ok:#1a7f37;--warn:#d4a72c;--bad:#c93c37;--na:#57707f;--tbc:#5560c8;
@@ -40,6 +69,7 @@
   --bg:#f6f8fa;--bg2:#edf1f6;--card:#ffffff;--ink:#0f1b2a;--mut:#5a6b7e;--line:#dde5ed;
   --navbg:#0d2137;--navtx:#ffffff;--who:#9fb3c8;
   --acc:#1d63d8;--acc-strong:#1d63d8;--acc-ink:#fff;--acc-soft:#1d63d814;
+  --grad:linear-gradient(92deg,#9fd0ff 0%,#7ee2ff 55%,#b9c8ff 100%);
   --input-bg:#ffffff;--field-border:#b9c6d2;--th-bg:#eef2f6;--track:#e3e9ef;
   --disabled:#9db2c5;
   --ok:#1a7f37;--warn:#8f6400;--bad:#c13333;--na:#57707f;--tbc:#5560c8;
@@ -66,6 +96,7 @@
   --bg:#091220;--bg2:#0d1828;--card:#111f34;--ink:#e8eef7;--mut:#94a8c4;--line:#20334e;
   --navbg:#060e1a;--navtx:#eaf1fb;--who:#7f95b3;
   --acc:#4fc1f5;--acc-strong:#4fc1f5;--acc-ink:#04141f;--acc-soft:#4fc1f522;
+  --grad:linear-gradient(92deg,#4fc1f5 0%,#7ee2ff 55%,#a5b8ff 100%);
   --input-bg:#0b1a2e;--field-border:#2c4666;--th-bg:#152845;--track:#20334e;
   --disabled:#2b425e80;
   --ok:#1a7f37;--warn:#d9ad3c;--bad:#c93c37;--na:#57707f;--tbc:#5560c8;
@@ -211,18 +242,41 @@ background-size:46px 46px;
 mask-image:radial-gradient(720px 420px at 50% 0%, #000 30%, transparent 75%)}
 .landing-hero .inner{max-width:840px;margin:0 auto;position:relative;z-index:1}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;
-letter-spacing:.06em;text-transform:uppercase;color:#9fd0ff;background:#58a6ff1a;
-border:1px solid #58a6ff40;border-radius:999px;padding:6px 14px;margin:0 0 22px}
-.eyebrow .dot{width:7px;height:7px;border-radius:50%;background:#58a6ff;
-box-shadow:0 0 8px #58a6ff}
+letter-spacing:.06em;text-transform:uppercase;color:var(--acc);background:var(--acc-soft);
+border:1px solid var(--acc);border-radius:999px;padding:6px 14px;margin:0 0 22px}
+.eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--acc);
+box-shadow:0 0 8px var(--acc);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
 .landing-hero h1{font-size:clamp(34px,5.6vw,58px);line-height:1.05;margin:0 0 18px;
 letter-spacing:-.028em;font-weight:750}
-.grad{background:linear-gradient(92deg,#58a6ff 0%,#7ee2ff 55%,#a5b8ff 100%);
--webkit-background-clip:text;background-clip:text;color:transparent}
+.grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .landing-hero p.sub{font-size:18.5px;color:#c9d8e8;max-width:640px;margin:0 0 32px;line-height:1.65}
 .cta-row{display:flex;gap:12px;flex-wrap:wrap}
 .btn.big{padding:14px 30px;font-size:16px;border-radius:10px}
 .btn.big.glow{box-shadow:0 10px 34px -10px var(--acc-strong),var(--shadow-sm)}
+/* live assessment panel — the product demo IS the hero */
+.ops-panel{margin-top:38px;border:1px solid #1d3a2b;border-radius:12px;background:#060f0acc;
+overflow:hidden;position:relative;z-index:1;box-shadow:0 24px 60px -28px rgba(0,0,0,.85);
+backdrop-filter:blur(4px)}
+.ops-head{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;
+border-bottom:1px solid #1d3a2b;font-family:ui-monospace,Menlo,Consolas,monospace;
+font-size:11.5px;color:#6fa88b}
+.ops-head .live{color:#2adf8f;font-weight:700}
+.ops-head .live b{display:inline-block;width:8px;height:8px;background:#2adf8f;border-radius:2px;
+margin-right:6px;vertical-align:baseline;animation:pulse 1.4s steps(2) infinite}
+.ops-row{display:grid;grid-template-columns:110px 1fr auto;gap:12px;padding:11px 16px;
+border-bottom:1px solid #12241a;font-size:13.5px;align-items:center;color:#d7e6dd;
+transition:background .3s}
+.ops-row:last-child{border-bottom:0}
+.ops-row .id{font-family:ui-monospace,Menlo,Consolas,monospace;color:#6fa88b;font-size:12px}
+.ops-row.scanning{background:#2adf8f14}
+.ops-row.scanning .id{color:#2adf8f}
+.ops-st{font-size:10.5px;font-weight:800;letter-spacing:.06em;padding:3px 10px;border-radius:4px;
+white-space:nowrap}
+.ops-st.ok{background:#0d2b1b;color:#5fe3a4}
+.ops-st.gap{background:#2e1214;color:#ff9d95}
+.ops-st.tbc{background:#12203c;color:#94b4f2}
+
 /* hero stat band — big-number anchoring */
 .hero-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;
 margin-top:48px;padding-top:34px;border-top:1px solid #ffffff1f;position:relative;z-index:1}

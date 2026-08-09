@@ -3,14 +3,23 @@
 {% block body %}
 <div class="landing-hero">
   <div class="inner">
-    <span class="eyebrow"><span class="dot"></span>DPDP Rules 2025 · in force now</span>
-    <h1>Is your organisation ready for <span class="grad">India's data protection law?</span></h1>
-    <p class="sub">Most organisations don't know where their gaps are. {{ brand }} scans your digital,
-      cloud and endpoint footprint, maps it to every DPDPA checkpoint, and shows you exactly what's
-      compliant, what's not — and the evidence for both.</p>
+    <span class="eyebrow"><span class="dot"></span>Monitoring · DPDP Rules 2025 · in force now</span>
+    <h1>Your DPDPA compliance posture, <span class="grad">measured — not guessed.</span></h1>
+    <p class="sub">{{ brand }} continuously assesses your organisation against every checkpoint of
+      India's data protection law — websites, cloud, endpoints and declarations — and proves each
+      finding with evidence.</p>
     <div class="cta-row">
       <a class="btn big glow" href="/login">Customer sign in →</a>
       <a class="btn big ghost" href="#how">See how it works</a>
+    </div>
+    <div class="ops-panel" aria-hidden="true">
+      <div class="ops-head"><span>assessment — {{ brand|lower }} rulebook v4</span>
+        <span class="live"><b></b>LIVE</span></div>
+      <div class="ops-row"><span class="id">NT-01</span><span>Privacy notice published &amp; accessible</span><span class="ops-st ok">COMPLIANT</span></div>
+      <div class="ops-row"><span class="id">CK-02</span><span>Cookie consent before non-essential trackers</span><span class="ops-st gap">GAP</span></div>
+      <div class="ops-row"><span class="id">SEC-04</span><span>Encryption at rest for personal data stores</span><span class="ops-st ok">COMPLIANT</span></div>
+      <div class="ops-row"><span class="id">XB-01</span><span>Cross-border transfer register maintained</span><span class="ops-st tbc">TO CONFIRM</span></div>
+      <div class="ops-row"><span class="id">BR-01</span><span>72-hour breach notification runbook</span><span class="ops-st ok">COMPLIANT</span></div>
     </div>
     <div class="hero-stats">
       <div class="hstat"><div class="n">86</div><div class="l">Checkpoints assessed</div></div>

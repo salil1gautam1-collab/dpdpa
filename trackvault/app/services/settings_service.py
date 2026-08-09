@@ -29,8 +29,8 @@ def set_raw(db: Session, key: str, value: str) -> None:
 
 
 # ---- Appearance / theme (app-wide, admin-controlled) ----
-VALID_THEMES = ("dark", "light", "midnight")
-DEFAULT_THEME = "dark"
+VALID_THEMES = ("sentinel", "dark", "light", "midnight")
+DEFAULT_THEME = "sentinel"
 # Short-TTL cache. The app runs multiple uvicorn workers, each its own process —
 # a forever-cache in one worker would never see a save made through another, so
 # the theme would look "stuck" for ~half of all requests. A few seconds of TTL
