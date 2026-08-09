@@ -19,15 +19,19 @@ _settings = get_settings()
 
 
 def _asset_stamp() -> str:
-    """Content hash of the stylesheet, used as a cache-buster (?v=...) so browsers
-    fetch a fresh copy whenever the CSS actually changes — including changes that
-    ship without a version bump."""
+    """Content hash of the static assets (CSS + JS), used as a cache-buster
+    (?v=...) so browsers fetch fresh copies whenever they actually change —
+    including changes that ship without a version bump."""
     import hashlib
-    try:
-        css = (Path(__file__).parent / "static" / "app.css").read_bytes()
-        return hashlib.md5(css).hexdigest()[:10]
-    except OSError:
-        return __version__
+    h = hashlib.md5()
+    found = False
+    for name in ("app.css", "app.js"):
+        try:
+            h.update((Path(__file__).parent / "static" / name).read_bytes())
+            found = True
+        except OSError:
+            pass
+    return h.hexdigest()[:10] if found else __version__
 
 
 _ASSET_STAMP = _asset_stamp()
