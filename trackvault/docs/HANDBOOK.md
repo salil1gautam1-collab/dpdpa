@@ -94,7 +94,13 @@ it on first sign-in; accounts can be deactivated).
 
 ## 3. The public site
 
-For logged-out visitors: **Home · How it works · About us · Contact · Sign in**.
+For logged-out visitors: **Home · How it works · About us · Contact · Sign in · Get started**.
+
+- **Get started (self-serve signup):** a prospect creates their company workspace themselves —
+  company name, websites, email, password — and lands signed-in in the submit-only client
+  workspace. The new company appears on your operator dashboard immediately.
+- The homepage also lists **coming-soon frameworks** (GDPR, HIPAA, SOC 2, ISO 27001) — demand
+  routes to the contact page.
 
 - The homepage opens on a **live assessment panel** — real checkpoint rows with verdict chips and
   a scanning sweep — plus the stat band (86 checkpoints · ₹250 cr max penalty · Nov 2026).
@@ -104,6 +110,9 @@ For logged-out visitors: **Home · How it works · About us · Contact · Sign i
 ---
 
 ## 4. Onboard a customer
+
+Customers can also self-serve via **Get started** on the homepage — then you skip straight to
+step 3's follow-up. The 🔎 box in the top bar searches companies by name. Manual path:
 
 1. Sign in as an operator → **Companies** dashboard → **Add a company** (name + websites —
    the websites power the automated web scan).
@@ -188,12 +197,19 @@ Set up on the company page → **Connectors**.
 
 ## 8. Running an assessment
 
-Company page → **Run assessment**. The engine:
+Company page → **Run assessment** — the button responds instantly and opens a **live progress
+page** narrating each step (scanning which site, which connector, resolving checkpoints). You can
+browse anywhere; the company page shows a running banner with a Watch-live link, and re-clicking
+Run rejoins the run. The engine:
 1. Scans consented websites (consent banners, trackers, cookies, security headers, TLS…) and
    consented cloud/endpoint systems.
 2. Merges the questionnaire declarations.
 3. Resolves all 86 checkpoints (scanner-beats-declaration) into a **snapshot**: score, verdict
    counts, evidence. Snapshots are permanent — nothing is overwritten, history is the audit trail.
+
+**When a customer submits inputs:** every admin is emailed immediately; if nobody runs the
+assessment within `TRACKVAULT_AUTORUN_HOURS` (default 2, 0 disables) it **auto-runs** and the
+customer gets their report anyway. The customer is told to expect their report within 1–2 hours.
 
 After every run, automatically:
 - The score donut and **coverage panel** (% verified automatically vs declared, and what still
@@ -205,6 +221,10 @@ After every run, automatically:
 
 ## 9. Reports, history and compare
 
+- **Two documents per assessment:** the executive **client report** (for the board) and the
+  **🔍 gap assessment** (for the team doing the work — full gap register with evidence,
+  remediation, and Owner/Target-date columns). Both linked beside every report button, both
+  print-ready, and the ✉ email form lets you attach either or both.
 - **Client report** — branded, board-ready: cover, score donut, executive summary, findings
   (gaps first) with masked evidence excerpts, remediation recommendations, the provenance bar,
   TBC "awaiting input" list, and the disclaimer. Open → Print → **Save as PDF**.
@@ -249,6 +269,10 @@ judgment human.**
 
 The law lives as **versioned data** — never hardcoded.
 
+- **Click any version number to read it**: every control grouped by section with severity,
+  legal reference, check method, evidence required and remediation — plus **Export for study**
+  (an Excel with a Review-notes column, made for counsel) and a JSON export. Exports are
+  audit-logged.
 - **Admin → Rulebook** (admin/cs/legal): the version table, plus two ways to update — a
   **form** to add a single checkpoint (id, category, severity, title, legal reference, check
   method, remediation…) or a bulk **import** for a whole revision.

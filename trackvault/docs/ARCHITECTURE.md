@@ -169,14 +169,18 @@ request ──► client-ip middleware ──► rate limiter (per-IP; stricter 
 
 ## 6. Background work
 
-Two mechanisms, deliberately simple (single-host deployment):
+Three mechanisms, deliberately simple (single-host deployment):
 
 1. **In-process threads** — document conversions (`conversion_service.start_job`). The job
    writes progress to `import_jobs` via short-lived sessions, so any web worker can render the
    progress page. Every exit path sets a terminal status — a job can't stay "running" forever.
    *Constraint: a conversion dies with the process on restart/redeploy — acceptable (operator
    just re-uploads); revisit with a real queue (e.g. RQ/Celery) if multi-host ever happens.*
-2. **Cron via `app.ops`** — `monitor` (scheduled re-assessments + alerts), `watch`
+2. **In-process ticker** — a 10-minute loop started at boot auto-runs assessments whose
+   customer submissions have waited past `TRACKVAULT_AUTORUN_HOURS` (race-safe: SKIP LOCKED +
+   one-job-per-company; auto-runs execute synchronously in their caller so short-lived CLI
+   processes can't orphan them).
+3. **Cron via `app.ops`** — `monitor` (which also runs the same auto-run check) (scheduled re-assessments + alerts), `watch`
    (regulatory sources), `purge-sessions`, `retention`, `erase`. All idempotent.
 
 The theme setting shows the multi-worker pattern used throughout: worker-local caches get a
