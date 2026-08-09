@@ -5,29 +5,35 @@
 <p class="small">Your DPDPA compliance workspace.</p>
 
 {% if notes %}
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <h3 style="margin:0">🔔 Notifications {% if unread %}<span class="badge b-GAP">{{ unread }} new</span>{% endif %}</h3>
-    {% if unread %}
-    <form method="post" action="/workspace/notifications/read" class="inline">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm gray">Mark all read</button>
-    </form>
-    {% endif %}
-  </div>
+<details class="card notifbox"{% if unread %} open{% endif %}>
+  <summary>
+    <span><b>🔔 Notifications</b> {% if unread %}<span class="badge b-GAP">{{ unread }} new</span>{% endif %}</span>
+    <span class="small">{{ notes|length }} message(s) · click a line for details</span>
+  </summary>
+  {% if unread %}
+  <form method="post" action="/workspace/notifications/read" class="inline" style="margin:6px 0 2px">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm gray">Mark all read</button>
+  </form>
+  {% endif %}
   {% for n in notes %}
-  <div style="padding:8px 0;border-bottom:1px solid var(--line)">
-    <b>{% if not n.read %}🔵 {% endif %}{{ n.title }}</b> <span class="small">{{ n.created_at.strftime('%Y-%m-%d') }}</span>
-    <div class="small" style="white-space:pre-wrap">{{ n.body[:280] }}</div>
-  </div>
+  <details class="nitem">
+    <summary>
+      <span class="ntitle">{% if not n.read %}<span class="ndot"></span>{% endif %}{{ n.title }}</span>
+      <span class="ndate">{{ n.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    </summary>
+    <div class="small nbody">{{ n.body[:400] }}</div>
+  </details>
   {% endfor %}
-</div>
+</details>
 {% endif %}
 
 <h2>Complete your assessment inputs</h2>
 <div class="grid c3">
   <div class="card"><h3>1. Questionnaire</h3><p class="small">Declare internal controls we can't verify automatically. <b>{{ answered }}/{{ total }}</b> answered.</p>
-    <a class="btn sm" href="/workspace/questionnaire">Fill questionnaire</a>
-    {% if latest and latest.counts.TBC %}<a class="btn sm indigo" href="/workspace/questionnaire?only=unconfirmed">🎯 Just the {{ latest.counts.TBC }} left after the scan</a>{% endif %}</div>
+    <div class="rowbtns">
+      <a class="btn sm" href="/workspace/questionnaire">Fill questionnaire</a>
+      {% if latest and latest.counts.TBC %}<a class="btn sm indigo" href="/workspace/questionnaire?only=unconfirmed">🎯 Just the {{ latest.counts.TBC }} left after the scan</a>{% endif %}
+    </div></div>
   <div class="card"><h3>2. Infrastructure &amp; cloud access</h3><p class="small">Optionally provide read-only access so we can verify posture directly. Consent per system.</p>
     <a class="btn sm" href="/companies/{{ c.id }}/connectors">Provide access &amp; consent</a></div>
   <div class="card"><h3>3. Submit</h3><p class="small">When your inputs are in, submit them — your assessment team prepares your report.</p>

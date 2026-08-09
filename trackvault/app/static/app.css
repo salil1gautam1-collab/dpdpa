@@ -259,6 +259,24 @@ padding:11px 15px;margin:14px 0;font-size:14px;color:var(--ink)}
 .notice-box{background:var(--notice-bg);border:1px solid var(--notice-bd);border-radius:12px;
 padding:16px 20px;font-size:13.5px;color:var(--notice-tx)}
 
+/* ---- notifications: collapsible panel, one line per message ---- */
+details.notifbox>summary{display:flex;justify-content:space-between;align-items:center;gap:12px;
+cursor:pointer;list-style:none;flex-wrap:wrap}
+details.notifbox>summary::-webkit-details-marker{display:none}
+details.notifbox>summary::after{content:"▸";color:var(--mut);font-size:13px;transition:transform .15s}
+details.notifbox[open]>summary::after{transform:rotate(90deg)}
+.nitem{border-bottom:1px solid var(--line)}
+.nitem:last-child{border-bottom:0}
+.nitem>summary{display:flex;justify-content:space-between;align-items:baseline;gap:14px;
+padding:8px 2px;cursor:pointer;list-style:none;font-size:13.5px}
+.nitem>summary::-webkit-details-marker{display:none}
+.nitem>summary:hover{background:var(--acc-soft);border-radius:6px}
+.ntitle{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.ndot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--acc);
+margin-right:8px;vertical-align:baseline}
+.ndate{color:var(--mut);font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.nbody{white-space:pre-wrap;padding:2px 2px 12px}
+
 /* ---- status chips: tinted ground + strong text + the word itself.
        Verified >=4.5:1 in every theme; never hue-only (color-blind safe). ---- */
 .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;
