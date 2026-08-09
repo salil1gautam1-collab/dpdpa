@@ -130,6 +130,32 @@ def run_scan(cid: str, request: Request, skip_web: str = Form(""), csrf: str = F
     return redirect(f"/companies/{cid}", msg)
 
 
+@router.post("/companies/{cid}/send-report")
+def send_report(cid: str, request: Request, to_email: str = Form(...), scan_id: str = Form(""),
+                note: str = Form(""), csrf: str = Form(""), db: Session = Depends(get_db)):
+    p = require(request, db, roles={Role.admin, Role.analyst, Role.cs, Role.legal})
+    c = _company_or_404(db, p.user.organization_id, cid)
+    check_csrf(p, csrf)
+    q = select(Snapshot).where(Snapshot.company_id == cid)
+    snap = (db.execute(q.where(Snapshot.scan_id == scan_id)).scalar_one_or_none() if scan_id
+            else db.execute(q.order_by(Snapshot.scan_id.desc())).scalars().first())
+    if not snap:
+        return redirect(f"/companies/{cid}", "No report to send yet — run an assessment first.", err=True)
+    to = to_email.strip()
+    if "@" not in to:
+        return redirect(f"/companies/{cid}", "Enter a valid recipient email.", err=True)
+    from ..services.notify_service import send_report_email
+    n = send_report_email(db, c, snap, to, note.strip())
+    record(db, action="report.email", actor=p.user, target_type="company", target_id=cid,
+           ip=getattr(request.state, "client_ip", ""), to=to, status=n.email_status)
+    if n.email_status == "sent":
+        where = f" (redirected to {n.email_delivered_to} — test mode)" if n.email_delivered_to != to else ""
+        return redirect(f"/companies/{cid}", f"Report emailed to {to}{where}.")
+    if n.email_status == "simulated":
+        return redirect(f"/companies/{cid}", "Email is in simulated mode — set SMTP to send for real. (Logged, not sent.)")
+    return redirect(f"/companies/{cid}", f"Could not send: {n.email_status}.", err=True)
+
+
 @router.post("/companies/{cid}/monitoring")
 def set_monitoring(cid: str, request: Request, frequency: str = Form("off"), csrf: str = Form(""),
                    db: Session = Depends(get_db)):
