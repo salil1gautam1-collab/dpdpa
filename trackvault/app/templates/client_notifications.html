@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block body %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+  <div>
+    <h1>Notifications</h1>
+    <p class="small" style="margin:0">{{ total_count }} message(s)
+      {% if unread %} · <b style="color:var(--acc)">{{ unread }} new</b>{% endif %} · grouped by day —
+      click a line for details.</p>
+  </div>
+  {% if unread %}
+  <form method="post" action="/workspace/notifications/read" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="back" value="/workspace/notifications">
+    <button class="btn sm gray">Mark all read</button>
+  </form>
+  {% endif %}
+</div>
+
+{% for day, items in groups.items() %}
+<details class="card notifbox"{% if loop.first %} open{% endif %}>
+  <summary>
+    <span><b>📅 {{ day }}</b>
+      {% set new_here = items|selectattr('read', 'equalto', False)|list|length %}
+      {% if new_here %}<span class="badge b-GAP">{{ new_here }} new</span>{% endif %}</span>
+    <span class="small">{{ items|length }} message(s)</span>
+  </summary>
+  {% for n in items %}
+  <details class="nitem">
+    <summary>
+      <span class="ntitle">{% if not n.read %}<span class="ndot"></span>{% endif %}{{ n.title }}</span>
+      <span class="ndate">{{ n.created_at.strftime('%H:%M') }}</span>
+    </summary>
+    <div class="small nbody">{{ n.body[:600] }}</div>
+  </details>
+  {% endfor %}
+</details>
+{% else %}
+<div class="card"><p class="small" style="margin:0">Nothing yet. New reports, alerts and rulebook
+  updates will appear here.</p></div>
+{% endfor %}
+{% endblock %}

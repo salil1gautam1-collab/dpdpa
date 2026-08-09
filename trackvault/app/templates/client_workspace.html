@@ -4,27 +4,9 @@
 <h1>{{ c.name }}</h1>
 <p class="small">Your DPDPA compliance workspace.</p>
 
-{% if notes %}
-<details class="card notifbox"{% if unread %} open{% endif %}>
-  <summary>
-    <span><b>🔔 Notifications</b> {% if unread %}<span class="badge b-GAP">{{ unread }} new</span>{% endif %}</span>
-    <span class="small">{{ notes|length }} message(s) · click a line for details</span>
-  </summary>
-  {% if unread %}
-  <form method="post" action="/workspace/notifications/read" class="inline" style="margin:6px 0 2px">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm gray">Mark all read</button>
-  </form>
-  {% endif %}
-  {% for n in notes %}
-  <details class="nitem">
-    <summary>
-      <span class="ntitle">{% if not n.read %}<span class="ndot"></span>{% endif %}{{ n.title }}</span>
-      <span class="ndate">{{ n.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-    </summary>
-    <div class="small nbody">{{ n.body[:400] }}</div>
-  </details>
-  {% endfor %}
-</details>
+{% if notif_unread %}
+<div class="banner op">🔔 You have <b>{{ notif_unread }}</b> new notification(s) —
+  <a href="/workspace/notifications">view them</a>.</div>
 {% endif %}
 
 <h2>Complete your assessment inputs</h2>

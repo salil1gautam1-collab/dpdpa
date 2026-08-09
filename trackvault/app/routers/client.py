@@ -37,12 +37,24 @@ def workspace(request: Request, db: Session = Depends(get_db)):
                         .order_by(Snapshot.scan_id.desc())).scalars().first()
     answered = len(list(db.execute(select(QuestionnaireAnswer).where(
         QuestionnaireAnswer.company_id == c.id)).scalars()))
-    notes = list(db.execute(select(Notification).where(Notification.company_id == c.id)
-                            .order_by(Notification.created_at.desc())).scalars())[:6]
-    unread = sum(1 for n in notes if not n.read)
     total = len(latest_rulebook(db)["controls"])
     return render(request, "client_workspace.html", c=c, latest=latest, answered=answered,
-                  total=total, notes=notes, unread=unread)
+                  total=total)
+
+
+@router.get("/workspace/notifications")
+def notifications_page(request: Request, db: Session = Depends(get_db)):
+    """All notifications, grouped by date (newest first) — its own page so the
+    workspace never floods."""
+    p, c = _client_company(request, db)
+    notes = list(db.execute(select(Notification).where(Notification.company_id == c.id)
+                            .order_by(Notification.created_at.desc())).scalars())
+    groups: dict = {}  # insertion-ordered: newest date first
+    for n in notes:
+        groups.setdefault(n.created_at.strftime("%A, %d %B %Y"), []).append(n)
+    unread = sum(1 for n in notes if not n.read)
+    return render(request, "client_notifications.html", c=c, groups=groups,
+                  unread=unread, total_count=len(notes))
 
 
 @router.post("/workspace/notifications/read")
@@ -54,7 +66,8 @@ async def mark_read(request: Request, db: Session = Depends(get_db)):
                                                    Notification.read.is_(False))).scalars():
         n.read = True
     db.commit()
-    return redirect("/workspace")
+    back = form.get("back", "")
+    return redirect(back if back.startswith("/workspace") else "/workspace/notifications")
 
 
 @router.post("/workspace/submit-inputs")

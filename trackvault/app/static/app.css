@@ -198,6 +198,9 @@ border-bottom:1px solid var(--line)}
 .navlinks a{color:var(--navtx);opacity:.85;font-weight:500;transition:opacity .15s}
 .navlinks a:hover{opacity:1;text-decoration:none}
 .who{color:var(--who);font-size:12.5px}
+.navbadge{display:inline-block;min-width:18px;padding:1px 6px;border-radius:10px;
+background:var(--bad);color:#fff;font-size:11px;font-weight:700;text-align:center;
+vertical-align:middle;line-height:1.4}
 main.wrap{padding-top:26px;padding-bottom:48px;flex:1;width:100%}
 
 /* ---- typography ---- */
