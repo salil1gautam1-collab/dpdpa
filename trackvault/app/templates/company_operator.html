@@ -181,4 +181,31 @@ RET-01: partial: Retention schedule in draft"></textarea>
 {% else %}
 <p class="small">No assessment has run yet.</p>
 {% endif %}
+
+{% if user.role.value == 'admin' %}
+<h2>Data lifecycle</h2>
+<div class="card">
+  <h3 style="margin-top:0">📦 Export everything</h3>
+  <p class="small">One JSON file with all data held for <b>{{ c.name }}</b>: profile, consent record,
+  questionnaire answers, every assessment with evidence, notification history, connector
+  configuration. Credentials are never exported. Use it for data-portability requests or as the
+  final archive before deletion.</p>
+  <a class="btn" href="/companies/{{ c.id }}/export">⬇ Export company data (JSON)</a>
+</div>
+<div class="card" style="border-color:var(--bad)">
+  <h3 style="margin-top:0">🗑 Delete this company (DPDPA erasure)</h3>
+  <p class="small"><b>Permanent.</b> Removes the company, its client login, questionnaire answers,
+  all assessments and evidence, notifications and connector records. The audit log keeps one
+  entry recording that the erasure happened, who asked for it and why. <b>Export first</b> —
+  there is no undo.</p>
+  <form method="post" action="/companies/{{ c.id }}/delete">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Type the company name exactly to confirm: <span class="tag">{{ c.name }}</span></label>
+    <input type="text" name="confirm_name" placeholder="{{ c.name }}" required style="max-width:420px">
+    <label>Reason (recorded in the audit log)</label>
+    <input type="text" name="reason" placeholder="e.g. engagement ended — client requested erasure" style="max-width:420px">
+    <p style="margin-top:12px"><button class="btn red" type="submit">Delete permanently</button></p>
+  </form>
+</div>
+{% endif %}
 {% endblock %}

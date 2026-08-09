@@ -36,6 +36,28 @@ async def lifespan(app: FastAPI):
                 log.error("PRODUCTION CONFIG: %s", i)
             raise RuntimeError("Insecure production configuration — see logs. Refusing to start.")
     log.info("TrackVault %s started (env=%s)", __version__, settings.environment)
+    # Conversion jobs run as in-process threads; a restart/redeploy kills them.
+    # Mark orphans honestly instead of leaving them "running" forever.
+    try:
+        from datetime import datetime, timedelta, timezone
+        from .db import SessionLocal
+        from .models import ImportJob
+        from sqlalchemy import select
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+        with SessionLocal() as s:
+            orphans = list(s.execute(select(ImportJob).where(
+                ImportJob.status.in_(["queued", "running"]),
+                ImportJob.created_at < cutoff)).scalars())
+            for j in orphans:
+                j.status = "error"
+                j.stage = "Interrupted by an app restart"
+                j.note = "The server restarted while this conversion was running. Please re-upload the document."
+                j.finished_at = datetime.now(timezone.utc)
+            if orphans:
+                s.commit()
+                log.warning("marked %d orphaned conversion job(s) as interrupted", len(orphans))
+    except Exception:  # never block startup over cleanup
+        log.exception("orphaned-job sweep failed")
     yield
 
 

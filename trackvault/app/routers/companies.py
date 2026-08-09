@@ -316,3 +316,37 @@ def set_client_login(cid: str, request: Request, email: str = Form(...), csrf: s
            ip=getattr(request.state, "client_ip", ""), email=email)
     return redirect(f"/companies/{cid}",
                     f"Client login set: {email}. One-time temporary password: {temp} — share it securely.")
+
+
+# ---- Export & delete (DPDPA portability + erasure; admin only) ----
+@router.get("/companies/{cid}/export")
+def export_company_data(cid: str, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import Response
+    from ..services.company_service import export_company
+    p = require(request, db, roles={Role.admin})
+    c = _company_or_404(db, p.user.organization_id, cid)
+    data = export_company(db, c)
+    record(db, action="company.export", actor=p.user, target_type="company", target_id=cid,
+           ip=getattr(request.state, "client_ip", ""))
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in c.name)[:40]
+    stamp = date.today().isoformat()
+    return Response(content=data, media_type="application/json",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="TrackVault-Export-{safe}-{stamp}.json"'})
+
+
+@router.post("/companies/{cid}/delete")
+async def delete_company(cid: str, request: Request, db: Session = Depends(get_db)):
+    from ..services.company_service import erase_company
+    p = require(request, db, roles={Role.admin})
+    c = _company_or_404(db, p.user.organization_id, cid)
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    typed = (form.get("confirm_name", "") or "").strip()
+    if typed != c.name:
+        return redirect(f"/companies/{cid}",
+                        "Deletion cancelled — the company name you typed didn't match exactly.",
+                        err=True)
+    reason = (form.get("reason", "") or "").strip() or "erasure requested by admin"
+    name = erase_company(db, cid, reason=reason, actor_email=p.user.email)
+    return redirect("/dashboard", f"{name} and all its data have been permanently erased.")

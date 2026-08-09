@@ -88,21 +88,16 @@ def monitor() -> int:
 
 
 def erase(company_id: str) -> None:
+    """Shared code path with the admin UI's delete button (company_service)."""
+    from .services.company_service import erase_company
     db = SessionLocal()
     try:
-        c = db.get(Company, company_id)
-        if not c:
+        try:
+            name = erase_company(db, company_id, reason="DPDPA erasure via ops CLI",
+                                 actor_email="ops-cli")
+        except ValueError:
             print("company not found")
             return
-        name = c.name
-        for model in (Snapshot, Connector, QuestionnaireAnswer, Notification):
-            db.execute(delete(model).where(model.company_id == company_id))
-        for u in db.execute(select(User).where(User.company_id == company_id)).scalars():
-            db.delete(u)
-        db.add(AuditLog(action="company.erase", target_type="company", target_id=company_id,
-                        detail={"name": name, "reason": "DPDPA erasure / engagement end"}))
-        db.delete(c)
-        db.commit()
         print(f"erased company {name} and all associated data")
     finally:
         db.close()

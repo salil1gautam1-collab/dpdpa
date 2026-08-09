@@ -6,11 +6,14 @@
 analyst (runs assessments), viewer (read-only), client (external customer).</p>
 <div class="overflow">
 <table>
-  <tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr>
+  <tr><th>Email</th><th>Name</th><th>Role</th><th>Company</th><th>Status</th><th>Last login</th><th></th></tr>
   {% for u in users %}
   <tr>
     <td>{{ u.email }}</td><td>{{ u.name }}</td>
     <td><span class="pill admin">{{ u.role.value }}</span></td>
+    <td class="small">{% if u.company_id and companies.get(u.company_id) %}
+      <a href="/companies/{{ u.company_id }}">{{ companies[u.company_id].name }}</a>
+      {% else %}—{% endif %}</td>
     <td>{{ 'active' if u.is_active else 'disabled' }}{% if u.must_change_password %} · must reset{% endif %}</td>
     <td class="small">{{ u.last_login_at.strftime('%Y-%m-%d %H:%M') if u.last_login_at else '—' }}</td>
     <td>
@@ -37,7 +40,16 @@ analyst (runs assessments), viewer (read-only), client (external customer).</p>
       {% for r in roles %}{% if r != 'client' %}<option value="{{ r }}">{{ r }}</option>{% endif %}{% endfor %}
     </select>
     <p style="margin-top:14px"><button class="btn green" type="submit">Create user</button></p>
-    <p class="small">A one-time temporary password is generated and shown once; the user must change it on first login.</p>
+    <p class="small">A one-time temporary password is generated and shown once; the user must change it on first login.
+    Operator roles work across all companies — they aren't tied to one.</p>
   </form>
+</div>
+
+<h2>Customer (client) logins</h2>
+<div class="banner op">
+  🏢 Customer logins are created on each <b>company's own page</b> — open the company →
+  <b>client login</b>. That flow is what enforces <b>one active client per company</b>, the rule
+  that makes it impossible for a report to reach another customer's inbox. Companies:
+  {% for cid, c in companies.items() %}<a href="/companies/{{ cid }}">{{ c.name }}</a>{{ " · " if not loop.last }}{% endfor %}
 </div>
 {% endblock %}

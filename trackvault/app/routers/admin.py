@@ -26,7 +26,9 @@ def users_page(request: Request, db: Session = Depends(get_db)):
     p = require(request, db, roles={Role.admin})
     users = list(db.execute(select(User).where(User.organization_id == p.user.organization_id)
                             .order_by(User.role, User.email)).scalars())
-    return render(request, "admin_users.html", users=users, roles=[r.value for r in Role])
+    companies = {c.id: c for c in db.execute(select(Company)).scalars()}
+    return render(request, "admin_users.html", users=users, roles=[r.value for r in Role],
+                  companies=companies)
 
 
 @router.post("/admin/users/create")
@@ -38,6 +40,10 @@ async def create_user_post(request: Request, db: Session = Depends(get_db)):
     role = form.get("role", "")
     if not email or "@" not in email or role not in {r.value for r in Role}:
         return redirect("/admin/users", "Valid email and role required.", err=True)
+    if role == Role.client.value:
+        return redirect("/admin/users", "Customer logins are created from the company's own page "
+                        "(open the company → client login) so each company keeps exactly one "
+                        "active client.", err=True)
     if db.execute(select(User).where(User.email == email)).scalar_one_or_none():
         return redirect("/admin/users", "That email already exists.", err=True)
     import secrets
