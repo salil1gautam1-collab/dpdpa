@@ -201,6 +201,10 @@ def _run_job(job_id: str, filename: str, data: bytes) -> None:
         best: dict = {r["controlId"]: {"controlId": r["controlId"], "status": r["status"],
                                        "evidence": r.get("evidence", ""), "sourceQuote": "",
                                        "confidence": "high"} for r in rows}
+        from ..config import get_settings
+        # Per-passage budget follows the model: bigger models on CPU are slower,
+        # and a slow passage must wait, not be dropped.
+        per_call = max(90, get_settings().ai_timeout)
         for i, passage in enumerate(passages, start=1):
             candidates = ai_mapper._shortlist(passage, kw, by_id, top=8)
             if candidates:
@@ -208,7 +212,7 @@ def _run_job(job_id: str, filename: str, data: bytes) -> None:
                 for attempt in (1, 2):  # one retry — a hiccup must not drop a passage
                     try:
                         raw = ai_mapper._call_ollama(
-                            ai_mapper._prompt(candidates, cats, passage), timeout=90)
+                            ai_mapper._prompt(candidates, cats, passage), timeout=per_call)
                         items = ai_mapper._extract_items(json.loads(raw))
                         break
                     except Exception:

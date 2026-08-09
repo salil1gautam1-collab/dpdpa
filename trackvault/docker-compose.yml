@@ -19,6 +19,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Every TRACKVAULT_* var in .env reaches the app; the explicit entries below
+    # only pin compose-level defaults. New settings need no compose edit.
+    env_file:
+      - path: .env
+        required: false
     environment:
       TRACKVAULT_DATABASE_URL: postgresql+psycopg://trackvault:trackvault@db:5432/trackvault
       TRACKVAULT_ENVIRONMENT: ${TRACKVAULT_ENVIRONMENT:-development}
