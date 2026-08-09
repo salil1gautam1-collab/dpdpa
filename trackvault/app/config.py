@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     ai_model: str = "llama3.2:3b"
     ai_timeout: int = 120
     ai_max_doc_chars: int = 24000
+    ai_max_chunks: int = 8
+    # Assisted document import (self-hosted LLM). Parked OFF by default: on a CPU-only
+    # host the 3B model is slow and low-yield. Flip on when running on a GPU / larger
+    # model, or when a faster provider is wired in. The deterministic template + paste
+    # import remains the reliable primary path either way.
+    ai_import_enabled: bool = False
 
     # SMTP (email notifications). Blank host -> simulated (nothing sent).
     smtp_host: str = ""

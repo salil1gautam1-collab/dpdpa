@@ -75,21 +75,24 @@
     <b>N/A</b>, plus the consent statement. Email it to the customer to fill in.</p>
   <a class="btn" href="/companies/{{ c.id }}/questionnaire-template.xlsx">⬇ Download Excel template</a>
 </div>
+{% if ai_import_enabled %}
 <div class="card" style="border-color:#5c6bc0">
-  <h3 style="margin-top:0">🤖 Intelligent import — read the customer's own document</h3>
-  <p class="small">Don't have it in our format? Upload the customer's <b>own</b> compliance document (Word, PDF,
-    Excel — their data sheet, auditor's report, gap register, in their own words). A <b>self-hosted</b> model
-    reads it and proposes which DPDPA checkpoints it answers — you then review and confirm each one. Nothing
-    leaves your environment; nothing is applied without your approval.</p>
+  <h3 style="margin-top:0">🤖 Assisted import — let us read the customer's own document</h3>
+  <p class="small">The customer can share their compliance information in <b>whatever form they already have it</b> —
+    a Word note, an Excel sheet, a PDF, an auditor's report or a gap register, in their own words. Upload it here
+    and a <b>private, self-hosted</b> assistant reads it and suggests which DPDPA checkpoints it answers. You review
+    and confirm each suggestion — nothing leaves your environment, and nothing is applied without your approval.
+    Best for detailed documents; for short notes, the template or paste option below is quicker.</p>
   <form method="post" action="/companies/{{ c.id }}/ai-import" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <input type="file" name="file" accept=".docx,.pdf,.xlsx,.xlsm,.csv,.txt" required>
     <p style="margin-top:12px"><button class="btn" type="submit" style="background:#5c6bc0">🤖 Analyse &amp; suggest answers</button></p>
   </form>
 </div>
+{% endif %}
 <div class="card">
   <h3 style="margin-top:0">📥 Direct import — file already in a usable format</h3>
-  <p class="small">If the file already has a control column + status column (like our template), upload it or paste simple rows — parsed directly, no AI.</p>
+  <p class="small">If the file already has a control column + status column (like our template), upload it or paste simple rows — parsed directly and reliably.</p>
   <form method="post" action="/companies/{{ c.id }}/import" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ csrf }}">
 

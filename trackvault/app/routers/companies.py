@@ -91,9 +91,11 @@ def company_detail(cid: str, request: Request, db: Session = Depends(get_db)):
     recent_alerts = list(db.execute(select(Notification).where(
         Notification.company_id == cid, Notification.ntype == "ALERT")
         .order_by(Notification.created_at.desc())).scalars())[:4]
+    from ..config import get_settings
     return render(request, "company_operator.html", c=c, snaps=snaps, latest=latest,
                   answered=answered, total=len(rb["controls"]), connected=connected,
-                  last_run=last_run, recent_alerts=recent_alerts)
+                  last_run=last_run, recent_alerts=recent_alerts,
+                  ai_import_enabled=get_settings().ai_import_enabled)
 
 
 @router.post("/companies/{cid}/consent")

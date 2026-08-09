@@ -24,6 +24,10 @@ _LABELS = {"aws": "AWS", "azure": "Azure", "intune": "Intune", "gcp": "GCP",
 
 
 def _company(request, db, cid):
+    from ..config import get_settings
+    if not get_settings().ai_import_enabled:
+        # Parked feature — not reachable while disabled.
+        raise HTTPException(404, "Not found")
     p = require(request, db, roles={Role.admin, Role.analyst, Role.cs})
     c = db.get(Company, cid)
     if not c or c.organization_id != p.user.organization_id:
@@ -80,7 +84,8 @@ async def ai_import(cid: str, request: Request, db: Session = Depends(get_db)):
     cats = {x["id"]: x["name"] for x in rb["categories"]}
     suggestions, note = ai_mapper.propose_mappings(text, rb["controls"], cats)
     if not suggestions:
-        return redirect(f"/companies/{cid}", note, err=True)
+        # "found nothing confident" is a normal outcome, not an error — show it calmly.
+        return redirect(f"/companies/{cid}", note)
 
     # Replace any prior pending batch for this company
     db.execute(delete(AiSuggestion).where(AiSuggestion.company_id == cid))

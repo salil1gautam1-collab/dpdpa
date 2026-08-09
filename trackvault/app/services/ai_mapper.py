@@ -12,6 +12,7 @@ operator reviews and confirms — the human is always the final decision.
 from __future__ import annotations
 
 import json
+import re
 import urllib.request
 
 from ..config import get_settings
@@ -39,32 +40,80 @@ def provider_available() -> tuple[bool, str]:
     return False, f"Unknown AI provider '{s.ai_provider}'."
 
 
-def _catalogue(controls: list[dict], cats: dict) -> str:
-    lines = []
+# ---- Retrieval helpers: shrink the model's job from "86 controls" to "~8 candidates" ----
+
+_STOP = {"the", "and", "for", "with", "that", "this", "are", "not", "our", "your", "you",
+         "from", "have", "has", "was", "were", "will", "any", "all", "data", "personal",
+         "such", "which", "must", "should", "when", "where", "into", "per", "via", "used",
+         "use", "using", "under", "over", "been", "being", "does", "may", "can", "shall"}
+
+
+def _tokens(text: str) -> set:
+    return {w for w in re.findall(r"[a-z]{3,}", (text or "").lower()) if w not in _STOP}
+
+
+def _control_keywords(controls: list[dict], cats: dict) -> dict:
+    """Per-control keyword set from its title + category name, for cheap keyword retrieval."""
+    kw = {}
     for c in controls:
-        lines.append(f"{c['id']} [{cats.get(c['category'], c['category'])}] {c['title']}")
-    return "\n".join(lines)
+        kw[c["id"]] = _tokens(c["title"]) | _tokens(cats.get(c["category"], ""))
+    return kw
 
 
-def _prompt(controls: list[dict], cats: dict, doc_text: str) -> list[dict]:
+def _chunks(text: str, size: int = 1600) -> list[str]:
+    """Split the document into passages on blank lines / row boundaries, then pack up to
+    ~size chars each so each model call sees a small, coherent slice."""
+    paras = [p.strip() for p in re.split(r"\n\s*\n|\r\n\r\n", text) if p.strip()]
+    if len(paras) <= 1:
+        paras = [p.strip() for p in text.splitlines() if p.strip()]
+    out, buf = [], ""
+    for p in paras:
+        if len(buf) + len(p) + 1 > size and buf:
+            out.append(buf)
+            buf = p
+        else:
+            buf = f"{buf}\n{p}" if buf else p
+    if buf:
+        out.append(buf)
+    return out
+
+
+def _shortlist(chunk: str, kw: dict, controls_by_id: dict, top: int = 8) -> list[dict]:
+    """Return the controls whose keywords overlap this passage most — the candidates
+    we'll actually ask the model about."""
+    toks = _tokens(chunk)
+    scored = []
+    for cid, words in kw.items():
+        hits = len(words & toks)
+        if hits:
+            scored.append((hits, cid))
+    scored.sort(reverse=True)
+    return [controls_by_id[cid] for _, cid in scored[:top]]
+
+
+def _catalogue(controls: list[dict], cats: dict) -> str:
+    return "\n".join(f"{c['id']} [{cats.get(c['category'], c['category'])}] {c['title']}"
+                     for c in controls)
+
+
+def _prompt(candidates: list[dict], cats: dict, passage: str) -> list[dict]:
     system = (
         "You are a DPDPA (India Digital Personal Data Protection Act) compliance analyst. "
-        "You are given a catalogue of compliance checkpoints (id, area, title) and a client's "
-        "document written in their own words/format. Map the document's content onto the "
-        "checkpoints. For each checkpoint you find clear evidence for, output an object with: "
-        "controlId (must be an id from the catalogue), status (one of COMPLIANT, PARTIAL, GAP, NA, TBC), "
-        "evidence (a short paraphrase), sourceQuote (the exact sentence/phrase from the document you "
-        "used), and confidence (high, medium, or low). Only include checkpoints you have real evidence "
-        "for — do not guess. Map 'not compliant'/'no policy'/'missing' to GAP, partial arrangements to "
-        "PARTIAL, clearly-in-place controls to COMPLIANT, and 'does not apply' to NA. "
-        'Respond ONLY as JSON: {"mappings": [ ... ]}.')
-    user = (f"CHECKPOINT CATALOGUE:\n{_catalogue(controls, cats)}\n\n"
-            f"CLIENT DOCUMENT:\n{doc_text}\n\n"
+        "You are shown a SHORT LIST of candidate compliance checkpoints and one passage from a "
+        "client's document. For each candidate that the passage clearly speaks to, output an object: "
+        "controlId (exactly one of the listed ids), status (COMPLIANT, PARTIAL, GAP, NA, or TBC), "
+        "evidence (a short paraphrase), sourceQuote (the exact phrase from the passage), and "
+        "confidence (high, medium, or low). Skip any candidate the passage does not clearly address — "
+        "do not guess. Map 'not compliant'/'no policy'/'missing' to GAP, partial arrangements to PARTIAL, "
+        "clearly-in-place controls to COMPLIANT, 'does not apply' to NA. "
+        'Respond ONLY as JSON: {"mappings": [ ... ]}. If nothing matches, return {"mappings": []}.')
+    user = (f"CANDIDATE CHECKPOINTS:\n{_catalogue(candidates, cats)}\n\n"
+            f"PASSAGE:\n{passage}\n\n"
             'Return {"mappings":[{"controlId":...,"status":...,"evidence":...,"sourceQuote":...,"confidence":...}]}')
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def _call_ollama(messages: list[dict]) -> str:
+def _call_ollama(messages: list[dict], timeout: float | None = None) -> str:
     s = get_settings()
     payload = json.dumps({
         "model": s.ai_model, "messages": messages, "stream": False,
@@ -72,39 +121,105 @@ def _call_ollama(messages: list[dict]) -> str:
     }).encode("utf-8")
     req = urllib.request.Request(s.ai_base_url.rstrip("/") + "/api/chat", data=payload,
                                  headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=s.ai_timeout) as r:
+    with urllib.request.urlopen(req, timeout=timeout or s.ai_timeout) as r:
         data = json.loads(r.read().decode("utf-8"))
     return data.get("message", {}).get("content", "")
 
 
+def _extract_items(parsed):
+    """Be forgiving about the shape the model returns: {mappings:[...]},
+    a bare list, {controls:[...]}, or a dict keyed by control id."""
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        for key in ("mappings", "controls", "checkpoints", "results", "items"):
+            v = parsed.get(key)
+            if isinstance(v, list):
+                return v
+        # dict keyed by control id -> list of objects carrying the id
+        if parsed and all(isinstance(v, dict) for v in parsed.values()):
+            return [{"controlId": k, **v} for k, v in parsed.items()]
+    return []
+
+
+_CONF_RANK = {"high": 3, "medium": 2, "low": 1, "": 0}
+
+
 def propose_mappings(doc_text: str, controls: list[dict], cats: dict) -> tuple[list[dict], str]:
-    """Return (suggestions, note). suggestions validated against the catalogue."""
+    """Read the document in small passages, and for each passage ask the model only about
+    the ~8 checkpoints whose keywords appear there. This keeps every model call small and
+    fast (reliable on a CPU, no timeouts) and accumulates results across the whole document.
+
+    The model's answers are matched leniently against the catalogue (ids normalized so
+    'SEC-1' -> 'SEC-01'; loose status words mapped to the five canonical statuses). A human
+    reviews and confirms every suggestion — nothing here is authoritative."""
+    from .import_parser import build_id_lookup, match_control_id, normalize_status
+
     s = get_settings()
     ok, note = provider_available()
     if not ok:
         return [], note
     doc_text = (doc_text or "")[: s.ai_max_doc_chars]
     if not doc_text.strip():
-        return [], "No readable text found in the document."
-    valid_ids = {c["id"] for c in controls}
-    try:
-        raw = _call_ollama(_prompt(controls, cats, doc_text))
-        parsed = json.loads(raw)
-        items = parsed.get("mappings", parsed if isinstance(parsed, list) else [])
-    except Exception as ex:
-        return [], f"AI mapping failed: {type(ex).__name__}: {ex}"
+        return [], ("We couldn't read any text from that file. If it's a scanned image or a photo, "
+                    "please share a Word/Excel/PDF with selectable text.")
 
-    out, seen = [], set()
-    for m in items if isinstance(items, list) else []:
-        cid = str(m.get("controlId", "")).strip().upper()
-        st = str(m.get("status", "")).strip().upper()
-        if cid not in valid_ids or st not in VALID_STATUS or cid in seen:
+    lookup = build_id_lookup(c["id"] for c in controls)
+    by_id = {c["id"]: c for c in controls}
+    kw = _control_keywords(controls, cats)
+    passages = _chunks(doc_text)
+
+    # Rank passages by how "compliance-dense" they are, and cap how many we process so a
+    # huge document still finishes in bounded time. per_call keeps any single call short.
+    passages.sort(key=lambda p: len(_shortlist(p, kw, by_id, top=20)), reverse=True)
+    max_calls = getattr(s, "ai_max_chunks", 10) or 10
+    per_call = min(45, s.ai_timeout)
+
+    best: dict = {}
+    calls = errors = 0
+    for passage in passages:
+        if calls >= max_calls:
+            break
+        candidates = _shortlist(passage, kw, by_id, top=8)
+        if not candidates:
             continue
-        seen.add(cid)
-        out.append({
-            "controlId": cid, "status": st,
-            "evidence": str(m.get("evidence", ""))[:400],
-            "sourceQuote": str(m.get("sourceQuote", ""))[:300],
-            "confidence": str(m.get("confidence", "")).lower()[:10] or "medium",
-        })
-    return out, f"{len(out)} suggestion(s) proposed by the self-hosted model — review before applying."
+        calls += 1
+        try:
+            items = _extract_items(json.loads(_call_ollama(_prompt(candidates, cats, passage),
+                                                           timeout=per_call)))
+        except Exception:
+            errors += 1
+            continue
+        allowed = {c["id"] for c in candidates}
+        for m in items if isinstance(items, list) else []:
+            if not isinstance(m, dict):
+                continue
+            cid = match_control_id(str(m.get("controlId") or m.get("id") or ""), lookup)
+            st = normalize_status(str(m.get("status") or ""))
+            if not cid or not st or cid not in allowed:
+                continue
+            cand = {
+                "controlId": cid, "status": st,
+                "evidence": str(m.get("evidence", ""))[:400],
+                "sourceQuote": str(m.get("sourceQuote", "") or m.get("quote", ""))[:300],
+                "confidence": str(m.get("confidence", "")).lower()[:10] or "medium",
+            }
+            # keep the highest-confidence hit per checkpoint across passages
+            prev = best.get(cid)
+            if not prev or _CONF_RANK.get(cand["confidence"], 0) > _CONF_RANK.get(prev["confidence"], 0):
+                best[cid] = cand
+
+    out = sorted(best.values(), key=lambda x: x["controlId"])
+    truncated = " (large document — analysed the most relevant sections)" if calls >= max_calls else ""
+
+    if not out:
+        if calls == 0:
+            return [], ("The document didn't contain wording that lines up with the DPDPA checkpoints. "
+                        "The template or paste option below is the reliable path for this one.")
+        if errors == calls:
+            return [], ("The assistant service didn't respond in time. It may still be loading the model — "
+                        "try once more, or use the template/paste option below, which always works.")
+        return [], ("The assistant read the document but couldn't confidently match it to any checkpoint. "
+                    "This is common with short or free-form notes — the template or paste option below is the reliable path.")
+    return out, (f"The assistant suggested {len(out)} checkpoint answer(s) from the document{truncated}. "
+                 "Review each one — nothing is applied until you approve it.")
