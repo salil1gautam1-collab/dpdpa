@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Get started{% endblock %}
+{% block body %}
+<div class="authwrap" style="max-width:520px">
+  <div class="auth-hero">
+    <div class="lock">🚀</div>
+    <h1 style="margin:6px 0 2px">Create your {{ brand }} workspace</h1>
+    <p class="small">Tell us who you are, get your login instantly, and start your DPDPA
+      assessment — the questionnaire, your documents, optional read-only access, and your
+      evidence-backed report.</p>
+  </div>
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+  <div class="card">
+    <form method="post" action="/signup">
+      <label>Company name</label>
+      <input type="text" name="company" required autofocus placeholder="Acme Exports Pvt Ltd">
+      <label>Company website(s) <span class="small">— optional, comma-separated; powers the automated scan</span></label>
+      <input type="text" name="sites" placeholder="https://www.acme.example">
+      <label>Your name</label>
+      <input type="text" name="name" placeholder="Priya Sharma">
+      <label>Work email <span class="small">— this becomes your sign-in</span></label>
+      <input type="email" name="email" required autocomplete="username">
+      <label>Password <span class="small">— at least 10 characters</span></label>
+      <input type="password" name="password" required minlength="10" autocomplete="new-password">
+      <label>Confirm password</label>
+      <input type="password" name="password2" required minlength="10" autocomplete="new-password">
+      <p style="margin-top:18px"><button class="btn green" type="submit" style="width:100%">Create workspace →</button></p>
+    </form>
+    <p class="small" style="margin-top:14px">By creating a workspace you agree that assessments run only
+      with your explicit consent per system, access is read-only, and reports are not legal advice.
+      Already have a login? <a href="/login">Sign in</a>.</p>
+  </div>
+  <p class="small" style="text-align:center"><a href="/">← back to home</a></p>
+</div>
+{% endblock %}

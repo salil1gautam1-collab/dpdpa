@@ -63,10 +63,13 @@ def erase_company(db: Session, company_id: str, *, reason: str, actor_email: str
     if not c:
         raise ValueError("company not found")
     name = c.name
-    for model in (Snapshot, Connector, QuestionnaireAnswer, Notification, ImportJob):
+    from ..models import AssessJob, UserSession
+    # FK-safe order: sessions -> users -> company-scoped rows -> the company.
+    user_ids = select(User.id).where(User.company_id == company_id)
+    db.execute(delete(UserSession).where(UserSession.user_id.in_(user_ids)))
+    db.execute(delete(User).where(User.company_id == company_id))
+    for model in (Snapshot, Connector, QuestionnaireAnswer, Notification, ImportJob, AssessJob):
         db.execute(delete(model).where(model.company_id == company_id))
-    for u in db.execute(select(User).where(User.company_id == company_id)).scalars():
-        db.delete(u)
     db.add(AuditLog(actor_email=actor_email, action="company.erase", target_type="company",
                     target_id=company_id, detail={"name": name, "reason": reason}))
     db.delete(c)

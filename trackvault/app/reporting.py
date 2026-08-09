@@ -140,3 +140,97 @@ independently verified — and reduces the manual effort required.</p>"""
 {tbc_tbl}{na_tbl}
 <div class="disc pagebreak"><b>Disclaimer.</b> {_e(DISCLAIMER)}</div>
 </div></body></html>"""
+
+
+def gap_assessment(snap: dict, rulebook: dict, sites: list) -> str:
+    """The detailed working document alongside the executive client report:
+    discovery surface, the full gap register (with Owner / Target-date columns
+    to fill in), partials, and the to-confirm worklist grouped by area."""
+    brand = get_settings().brand
+    s = summarize(snap)
+    cats = {c["id"]: c["name"] for c in rulebook["categories"]}
+    meta = snap.get("meta", {}) or {}
+    d = snap["scanId"]
+    date_fmt = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+
+    # --- discovery surface -------------------------------------------------
+    pages = meta.get("pagesScanned") or []
+    connectors = [k[:-9] for k, v in meta.items() if k.endswith("Connector") and v == "ran"]
+    conn_line = ", ".join(connectors) if connectors else "none connected"
+    web_line = (f"{len(pages)} page(s) scanned" if pages
+                else _e(meta.get("webScanner", "not run")))
+    forms = meta.get("formsFound")
+    surface_rows = "".join([
+        f"<tr><th>Websites in scope</th><td>{_e(', '.join(sites) or '—')}</td></tr>",
+        f"<tr><th>Website scan</th><td>{web_line}</td></tr>",
+        (f"<tr><th>Data-collection forms found</th><td>{_e(forms)}</td></tr>" if forms is not None else ""),
+        f"<tr><th>Infrastructure connectors</th><td>{_e(conn_line)}</td></tr>",
+        f"<tr><th>Questionnaire declarations</th><td>merged into every applicable checkpoint</td></tr>",
+    ])
+
+    def _evcell(r, limit=2):
+        out = []
+        for x in (r.get("evidence") or [])[:limit]:
+            t = x.get("excerpt") or x.get("note") or ""
+            if t:
+                out.append(f'<div class="ev">{_e(t[:220])}</div>')
+        return "".join(out) or '<span style="color:#5b7186">—</span>'
+
+    ordered = sorted(snap["resolutions"], key=lambda r: (SEV_ORDER[r["severity"]], r["controlId"]))
+    gaps = [r for r in ordered if r["status"] == "GAP"]
+    partials = [r for r in ordered if r["status"] == "PARTIAL"]
+    tbc = [r for r in ordered if r["status"] == "TBC"]
+
+    def register(rows, title, note):
+        if not rows:
+            return ""
+        body = "".join(
+            f'<tr><td class="tag">{_e(r["controlId"])}</td>'
+            f'<td><b>{_e(r["title"])}</b><div style="font-size:11px;color:#5b7186">{_e(cats.get(r["category"], r["category"]))} · {_e(r["legalRef"])}</div></td>'
+            f'<td><span class="pill" style="background:{SEVCOL[r["severity"]]}">{_e(r["severity"])}</span></td>'
+            f'<td>{_evcell(r)}</td>'
+            f'<td class="rec">{_e(r["remediation"])}</td>'
+            f'<td></td><td></td></tr>' for r in rows)
+        return (f'<h2 class="sec">{title} ({len(rows)})</h2><p>{note}</p>'
+                f'<table><tr><th style="width:60px">Ref</th><th style="width:24%">Checkpoint</th>'
+                f'<th>Severity</th><th style="width:24%">What we observed</th>'
+                f'<th style="width:24%">Recommended remediation</th>'
+                f'<th style="width:90px">Owner</th><th style="width:90px">Target date</th></tr>{body}</table>')
+
+    tbc_html = ""
+    if tbc:
+        by_cat: dict = {}
+        for r in tbc:
+            by_cat.setdefault(r["category"], []).append(r)
+        blocks = ""
+        for cid_, rows in by_cat.items():
+            items = "".join(f"<tr><td class='tag'>{_e(r['controlId'])}</td><td>{_e(r['title'])}</td>"
+                            f"<td>{_e(r['severity'])}</td></tr>" for r in rows)
+            blocks += (f"<h3 style='font-family:Arial;font-size:14px;color:#0d2137'>"
+                       f"{_e(cats.get(cid_, cid_))} ({len(rows)})</h3>"
+                       f"<table><tr><th style='width:60px'>Ref</th><th>Checkpoint</th><th>Severity</th></tr>{items}</table>")
+        tbc_html = (f'<div class="pagebreak"></div><h2 class="sec">To confirm — the follow-up worklist ({len(tbc)})</h2>'
+                    f'<p>These checkpoints could not be verified automatically and are not yet declared. '
+                    f'Each needs either a questionnaire answer, a document, or a system connection.</p>{blocks}')
+
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>DPDPA Gap Assessment — {_e(snap['client'])}</title><style>{_CSS}</style></head><body>
+<div class="toolbar"><span>{_e(brand)} · Gap assessment (working document)</span><button onclick="window.print()">⭳ Save as PDF</button></div>
+<div class="sheet">
+<div style="border-top:8px solid #0d2137;padding-top:26px;margin-bottom:8px">
+<div class="kicker">DPDPA Gap Assessment &amp; Discovery</div>
+<h1 style="font-size:32px;margin:8px 0 2px;color:#0d2137">Gap Assessment</h1>
+<div class="client" style="font-size:22px;margin:6px 0 2px">{_e(snap['client'])}</div>
+<div class="meta">Assessment {_e(snap['scanId'])} · {date_fmt} · rulebook v{_e(snap['rulebookVersion'])} ·
+score {s['complianceScore']}% · {s['counts']['GAP']} gaps · {s['counts']['PARTIAL']} partial ·
+{s['counts']['TBC']} to confirm</div>
+<p class="rec" style="margin-top:10px">This is the working document behind the executive report: every open
+item with its evidence and recommended remediation, plus Owner and Target-date columns to drive closure.
+The executive report is the companion for the board.</p></div>
+<h2 class="sec">1. What was assessed</h2>
+<table>{surface_rows}</table>
+{register(gaps, "2. Gap register", "Checkpoints required by the DPDP framework and found missing. Severity-ordered — start at the top.")}
+{register(partials, "3. Partial implementations", "Arrangements that exist but are incomplete. Usually the fastest score gains.")}
+{tbc_html}
+<div class="disc pagebreak"><b>Disclaimer.</b> {_e(DISCLAIMER)}</div>
+</div></body></html>"""

@@ -13,7 +13,7 @@
     <td><b>{{ s.score }}%</b></td>
     <td class="small">gaps {{ s.counts.GAP }} · partial {{ s.counts.PARTIAL }} · TBC {{ s.counts.TBC }}</td>
     <td class="small">v{{ s.rulebook_version }}</td>
-    <td><a class="btn sm" target="_blank" href="/companies/{{ c.id }}/report/{{ s.scan_id }}">Open</a></td>
+    <td class="rowbtns"><a class="btn sm" target="_blank" href="/companies/{{ c.id }}/report/{{ s.scan_id }}">Report</a> <a class="btn sm indigo" target="_blank" href="/companies/{{ c.id }}/gap-assessment/{{ s.scan_id }}">Gaps</a></td>
   </tr>
   {% else %}
   <tr><td colspan="5" class="small">No assessments yet.</td></tr>

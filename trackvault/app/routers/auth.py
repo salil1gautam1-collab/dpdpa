@@ -44,6 +44,61 @@ def contact(request: Request, db: Session = Depends(get_db)):
     return render(request, "contact.html", contact_email=effective_email_config(db)["from_addr"])
 
 
+@router.get("/signup")
+def signup_form(request: Request, db: Session = Depends(get_db)):
+    attach_principal(request, db)
+    return render(request, "signup.html")
+
+
+@router.post("/signup")
+def signup(request: Request, company: str = Form(...), sites: str = Form(""),
+           name: str = Form(""), email: str = Form(...), password: str = Form(...),
+           password2: str = Form(...), db: Session = Depends(get_db)):
+    """Self-service: a prospect creates their company workspace and signs straight
+    in as its client (submit-only). The operator team sees the new company on the
+    dashboard and takes it from there."""
+    import re as _re
+    from ..models import Company, Notification, Organization
+    email = email.strip().lower()
+    company_name = company.strip()
+    if not company_name or len(company_name) < 2:
+        return render(request, "signup.html", error="Please enter your company name.")
+    if "@" not in email or "." not in email.split("@")[-1]:
+        return render(request, "signup.html", error="Please enter a valid work email.")
+    if password != password2:
+        return render(request, "signup.html", error="The two passwords don't match.")
+    if len(password) < 10:
+        return render(request, "signup.html", error="Password must be at least 10 characters.")
+    if db.execute(select(User).where(User.email == email)).scalar_one_or_none():
+        return render(request, "signup.html",
+                      error="That email already has an account — try signing in instead.")
+    org = db.execute(select(Organization)).scalars().first()
+    site_list = [s.strip() for s in sites.split(",") if s.strip()][:5]
+    slug = _re.sub(r"[^a-z0-9]+", "-", company_name.lower()).strip("-")
+    c = Company(organization_id=org.id, name=company_name, slug=slug, sites=site_list,
+                scan_consent={"granted": False}, contact=email)
+    db.add(c)
+    db.flush()
+    u = User(organization_id=org.id, email=email, name=(name.strip() or "Client"),
+             role=Role.client, password_hash=hash_password(password),
+             must_change_password=False, company_id=c.id)
+    db.add(u)
+    db.commit()
+    record(db, action="company.signup", actor=u, target_type="company", target_id=c.id,
+           ip=getattr(request.state, "client_ip", ""), name=company_name)
+    db.add(Notification(company_id=c.id, ntype="WELCOME", title=f"Welcome to {_s.brand}",
+                        body=("Your workspace is ready. Start with the questionnaire, optionally "
+                              "grant read-only access to your systems, then submit your inputs — "
+                              "your assessment team prepares your report from there.")))
+    db.commit()
+    raw, _sess = create_session(db, u, ip=getattr(request.state, "client_ip", ""))
+    resp = RedirectResponse("/workspace?msg=Welcome!%20Your%20workspace%20is%20ready%20—%20start%20with%20the%20questionnaire.",
+                            status_code=303)
+    resp.set_cookie(SESSION_COOKIE, raw, httponly=True, samesite="lax",
+                    secure=_s.is_production, max_age=_s.session_ttl_hours * 3600, path="/")
+    return resp
+
+
 @router.get("/login")
 def login_form(request: Request, db: Session = Depends(get_db)):
     attach_principal(request, db)

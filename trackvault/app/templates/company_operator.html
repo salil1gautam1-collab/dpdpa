@@ -195,7 +195,8 @@ RET-01: partial: Retention schedule in draft"></textarea>
 {% if latest %}
 <div class="grid c3">
   <div class="card"><h3>📕 Client report (PDF)</h3><p class="small">Branded deliverable — cover, summary, findings, evidence.</p>
-    <a class="btn sm" target="_blank" href="/companies/{{ c.id }}/report/{{ latest.scan_id }}">Open &amp; save as PDF</a></div>
+    <div class="rowbtns"><a class="btn sm" target="_blank" href="/companies/{{ c.id }}/report/{{ latest.scan_id }}">Open &amp; save as PDF</a>
+    <a class="btn sm indigo" target="_blank" href="/companies/{{ c.id }}/gap-assessment/{{ latest.scan_id }}">🔍 Gap assessment</a></div></div>
   <div class="card"><h3>🗂 History</h3><p class="small">Every assessment with date &amp; score; reopen or compare.</p>
     <a class="btn sm gray" href="/companies/{{ c.id }}/history">Open history</a></div>
 </div>

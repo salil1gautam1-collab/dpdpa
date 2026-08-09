@@ -49,6 +49,18 @@ def report(cid: str, scan_id: str, request: Request, db: Session = Depends(get_d
     return HTMLResponse(client_report(snap.data, rb, list(c.sites or [])))
 
 
+@router.get("/companies/{cid}/gap-assessment/{scan_id}")
+def gap_assessment_view(cid: str, scan_id: str, request: Request, db: Session = Depends(get_db)):
+    from ..reporting import gap_assessment
+    p, c = _access(request, db, cid)
+    snap = db.execute(select(Snapshot).where(Snapshot.company_id == cid,
+                                             Snapshot.scan_id == scan_id)).scalar_one_or_none()
+    if not snap:
+        raise HTTPException(404, "Assessment not found")
+    rb = get_rulebook(db, snap.rulebook_version)
+    return HTMLResponse(gap_assessment(snap.data, rb, list(c.sites or [])))
+
+
 @router.get("/companies/{cid}/compare")
 def compare(cid: str, request: Request, a: str = "", b: str = "", db: Session = Depends(get_db)):
     p, c = _access(request, db, cid)
