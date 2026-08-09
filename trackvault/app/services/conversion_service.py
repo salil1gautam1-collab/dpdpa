@@ -152,10 +152,10 @@ def _run_job(job_id: str, filename: str, data: bytes) -> None:
         from .import_parser import match_control_id, normalize_status
         by_id = {c["id"]: c for c in controls}
         kw = ai_mapper._control_keywords(controls, cats)
-        passages = ai_mapper._chunks(text)
-        passages.sort(key=lambda p: len(ai_mapper._shortlist(p, kw, by_id, top=20)), reverse=True)
-        # background = we can afford the whole document, not just the densest slices
-        passages = passages[:60]
+        # Small passages, document order, NO skipping: a fast machine finishes
+        # sooner, a slow machine takes longer — either way the whole document
+        # gets converted. Small slices also read far better on a small model.
+        passages = ai_mapper._chunks(text, size=700)
         _set(job_id, total_chunks=len(passages), stage="Converting passage by passage")
 
         best: dict = {r["controlId"]: {"controlId": r["controlId"], "status": r["status"],
@@ -164,12 +164,17 @@ def _run_job(job_id: str, filename: str, data: bytes) -> None:
         for i, passage in enumerate(passages, start=1):
             candidates = ai_mapper._shortlist(passage, kw, by_id, top=8)
             if candidates:
-                try:
-                    raw = ai_mapper._call_ollama(
-                        ai_mapper._prompt(candidates, cats, passage), timeout=60)
-                    items = ai_mapper._extract_items(json.loads(raw))
-                except Exception:
-                    items = []
+                items = []
+                for attempt in (1, 2):  # one retry — a hiccup must not drop a passage
+                    try:
+                        raw = ai_mapper._call_ollama(
+                            ai_mapper._prompt(candidates, cats, passage), timeout=90)
+                        items = ai_mapper._extract_items(json.loads(raw))
+                        break
+                    except Exception:
+                        if attempt == 1:
+                            import time
+                            time.sleep(3)
                 allowed = {c["id"] for c in candidates}
                 for m in items if isinstance(items, list) else []:
                     if not isinstance(m, dict):
