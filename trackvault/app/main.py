@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     try:
         from datetime import datetime, timedelta, timezone
         from .db import SessionLocal
-        from .models import ImportJob
+        from .models import AssessJob, ImportJob
         from sqlalchemy import select
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
         with SessionLocal() as s:
@@ -53,9 +53,18 @@ async def lifespan(app: FastAPI):
                 j.stage = "Interrupted by an app restart"
                 j.note = "The server restarted while this conversion was running. Please re-upload the document."
                 j.finished_at = datetime.now(timezone.utc)
-            if orphans:
+            a_orphans = list(s.execute(select(AssessJob).where(
+                AssessJob.status.in_(["queued", "running"]),
+                AssessJob.created_at < cutoff)).scalars())
+            for j in a_orphans:
+                j.status = "error"
+                j.stage = "Interrupted by an app restart"
+                j.note = "The server restarted while this assessment was running. Just run it again."
+                j.finished_at = datetime.now(timezone.utc)
+            if orphans or a_orphans:
                 s.commit()
-                log.warning("marked %d orphaned conversion job(s) as interrupted", len(orphans))
+                log.warning("marked %d orphaned job(s) as interrupted",
+                            len(orphans) + len(a_orphans))
     except Exception:  # never block startup over cleanup
         log.exception("orphaned-job sweep failed")
     yield

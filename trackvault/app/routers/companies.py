@@ -92,10 +92,22 @@ def company_detail(cid: str, request: Request, db: Session = Depends(get_db)):
         Notification.company_id == cid, Notification.ntype == "ALERT")
         .order_by(Notification.created_at.desc())).scalars())[:4]
     from ..config import get_settings
+    # Anything running right now? Surface it so the operator can navigate freely
+    # and always find the way back to the progress page.
+    from ..models import AssessJob, ImportJob
+    running_assess = db.execute(select(AssessJob).where(
+        AssessJob.company_id == cid, AssessJob.status.in_(["queued", "running"]))
+        .order_by(AssessJob.created_at.desc())).scalars().first()
+    running_convert = db.execute(select(ImportJob).where(
+        ImportJob.company_id == cid, ImportJob.status.in_(["queued", "running"]))
+        .order_by(ImportJob.created_at.desc())).scalars().first()
+    from ..services.frameworks import FRAMEWORKS
     return render(request, "company_operator.html", c=c, snaps=snaps, latest=latest,
                   answered=answered, total=len(rb["controls"]), connected=connected,
                   last_run=last_run, recent_alerts=recent_alerts,
-                  ai_import_enabled=get_settings().ai_import_enabled)
+                  ai_import_enabled=get_settings().ai_import_enabled,
+                  running_assess=running_assess, running_convert=running_convert,
+                  frameworks=FRAMEWORKS, selected_fw=list(c.frameworks or ["dpdpa"]))
 
 
 @router.post("/companies/{cid}/consent")
@@ -120,16 +132,33 @@ def run_scan(cid: str, request: Request, skip_web: str = Form(""), csrf: str = F
     skip = bool(skip_web) or not c.sites
     if not skip and not (c.scan_consent or {}).get("granted"):
         return redirect(f"/companies/{cid}", "Record website scan authorisation first (or run questionnaire-only).", err=True)
-    from ..services.scan_service import run_and_notify
-    snap, alerts = run_and_notify(db, c, skip_web=skip, actor_email=p.user.email)
-    record(db, action="assessment.run", actor=p.user, target_type="company", target_id=cid,
-           ip=getattr(request.state, "client_ip", ""), scanId=snap.scan_id, score=snap.score, alerts=len(alerts))
-    msg = f"Assessment complete — score {snap.score}%."
-    if alerts:
-        msg += f" ⚠ {len(alerts)} change(s) flagged and the client was alerted."
-    else:
-        msg += " Client notified."
-    return redirect(f"/companies/{cid}", msg)
+    from ..models import AssessJob
+    running = db.execute(select(AssessJob).where(AssessJob.company_id == cid,
+                                                 AssessJob.status.in_(["queued", "running"]))
+                         ).scalars().first()
+    if running:
+        return redirect(f"/companies/{cid}/assess/{running.id}",
+                        "An assessment is already running for this company — here it is.")
+    from ..services.scan_service import start_assessment_job
+    job = start_assessment_job(db, c, skip_web=skip, actor_email=p.user.email)
+    record(db, action="assessment.start", actor=p.user, target_type="company", target_id=cid,
+           ip=getattr(request.state, "client_ip", ""), job=job.id, skip_web=skip)
+    return redirect(f"/companies/{cid}/assess/{job.id}",
+                    "Assessment started — this page follows the progress. You can browse "
+                    "anywhere; the company page shows it running too.")
+
+
+@router.get("/companies/{cid}/assess/{jid}")
+def assess_status(cid: str, jid: str, request: Request, db: Session = Depends(get_db)):
+    from ..models import AssessJob
+    p = require(request, db, operator=True)
+    c = _company_or_404(db, p.user.organization_id, cid)
+    j = db.get(AssessJob, jid)
+    if not j or j.company_id != cid:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Assessment run not found")
+    return render(request, "assess_status.html", c=c, j=j,
+                  refresh=(j.status in ("queued", "running")))
 
 
 @router.post("/companies/{cid}/send-report")
@@ -316,6 +345,28 @@ def set_client_login(cid: str, request: Request, email: str = Form(...), csrf: s
            ip=getattr(request.state, "client_ip", ""), email=email)
     return redirect(f"/companies/{cid}",
                     f"Client login set: {email}. One-time temporary password: {temp} — share it securely.")
+
+
+# ---- Framework selection / interest ----
+@router.post("/companies/{cid}/frameworks")
+async def set_frameworks(cid: str, request: Request, db: Session = Depends(get_db)):
+    from ..services.frameworks import FRAMEWORKS
+    p = require(request, db, roles={Role.admin, Role.analyst, Role.cs})
+    c = _company_or_404(db, p.user.organization_id, cid)
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    chosen = ["dpdpa"]  # the active framework is always on
+    for fid, fw in FRAMEWORKS.items():
+        if fw["status"] == "coming-soon" and form.get(f"fw-{fid}") == "1":
+            chosen.append(fid)
+    c.frameworks = chosen
+    db.commit()
+    record(db, action="company.frameworks", actor=p.user, target_type="company", target_id=cid,
+           ip=getattr(request.state, "client_ip", ""), frameworks=chosen)
+    extra = [FRAMEWORKS[f]["name"] for f in chosen if f != "dpdpa"]
+    return redirect(f"/companies/{cid}",
+                    ("Interest recorded for: " + ", ".join(extra) + " — they activate the moment "
+                     "their rulebooks ship.") if extra else "Framework selection saved (DPDPA).")
 
 
 # ---- Export & delete (DPDPA portability + erasure; admin only) ----

@@ -12,7 +12,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import (Boolean, DateTime, Enum, ForeignKey, Integer, String,
+from sqlalchemy import (Boolean, DateTime, Enum, Float, ForeignKey, Integer, String,
                         Text, UniqueConstraint, func)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -102,6 +102,9 @@ class Company(Base):
     submission: Mapped[dict] = mapped_column(JSONB, default=dict)
     monitor_frequency: Mapped[str] = mapped_column(String(12), default="off")  # off|weekly|monthly
     next_monitor_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Assessment frameworks: active today = dpdpa; the rest record customer
+    # interest so activation is instant when their rulebooks ship.
+    frameworks: Mapped[list] = mapped_column(JSONB, default=lambda: ["dpdpa"])
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     connectors: Mapped[list["Connector"]] = relationship(back_populates="company", cascade="all, delete-orphan")
@@ -206,6 +209,24 @@ class ImportJob(Base):
     total_chunks: Mapped[int] = mapped_column(Integer, default=0)
     done_chunks: Mapped[int] = mapped_column(Integer, default=0)
     found: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AssessJob(Base):
+    """A running assessment, narrated: the operator sees what the engine is doing
+    (scanning which site, which connector, resolving controls) instead of a
+    frozen browser. Same background-thread pattern as ImportJob."""
+    __tablename__ = "assess_jobs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    company_id: Mapped[str] = mapped_column(ForeignKey("companies.id"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(12), default="queued")  # queued|running|done|error
+    stage: Mapped[str] = mapped_column(String(200), default="")
+    scan_id: Mapped[str] = mapped_column(String(20), default="")       # set on success
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    alerts: Mapped[int] = mapped_column(Integer, default=0)
     note: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(String(255), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

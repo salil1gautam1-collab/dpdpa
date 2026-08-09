@@ -29,7 +29,7 @@ _SCANNERS = {
 
 
 def run_and_notify(db: Session, company: Company, *, skip_web: bool = False,
-                   actor_email: str = "") -> tuple[Snapshot, list]:
+                   actor_email: str = "", progress=None) -> tuple[Snapshot, list]:
     """Run an assessment, detect changes vs the previous snapshot, and notify the
     client (report-ready, or an alert if something regressed/appeared). Shared by
     the manual run route and the scheduled monitor."""
@@ -39,10 +39,13 @@ def run_and_notify(db: Session, company: Company, *, skip_web: bool = False,
     from ..domain.engine import summarize
     from ..models import Snapshot, User, Role
 
+    tell = progress or (lambda stage: None)
     prev = db.execute(select(Snapshot).where(Snapshot.company_id == company.id)
                       .order_by(Snapshot.scan_id.desc())).scalars().first()
     prev_data = prev.data if prev else None
-    snap = run_assessment(db, company, skip_web=skip_web, actor_email=actor_email)
+    snap = run_assessment(db, company, skip_web=skip_web, actor_email=actor_email,
+                          progress=progress)
+    tell("Comparing with the previous assessment — looking for regressions and new third parties…")
     alerts = compute_alerts(prev_data, snap.data)
 
     # Deterministic: the single active client for THIS company only — never another's.
@@ -54,6 +57,7 @@ def run_and_notify(db: Session, company: Company, *, skip_web: bool = False,
     date_fmt = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
     base = get_settings().base_url
     email_to = client.email if client else ""
+    tell("Preparing the client notification…")
     if alerts:
         body = (f"Your latest DPDPA assessment ({date_fmt}) flagged {len(alerts)} change(s) that need "
                 f"attention:\n\n{summarize_alerts(alerts)}\n\nCompliance score: {s['complianceScore']}%.\n"
@@ -97,7 +101,10 @@ def _assertions(db: Session, company_id: str) -> dict:
 
 
 def run_assessment(db: Session, company: Company, *, skip_web: bool = False,
-                   actor_email: str = "") -> Snapshot:
+                   actor_email: str = "", progress=None) -> Snapshot:
+    """progress: optional callable(str) — narrates each step for a live UI.
+    Defaults to a no-op so the scheduler/CLI paths are unchanged."""
+    tell = progress or (lambda stage: None)
     rb = latest_rulebook(db)
     started = utc_now()
     findings: list = []
@@ -106,6 +113,8 @@ def run_assessment(db: Session, company: Company, *, skip_web: bool = False,
     # 1. Website scan (consent-gated)
     consent = company.scan_consent or {}
     if not skip_web and company.sites and consent.get("granted"):
+        tell(f"Scanning website{'s' if len(company.sites) > 1 else ''}: "
+             f"{', '.join(company.sites)} — consent banners, trackers, cookies, security headers…")
         f, m = web.run(list(company.sites))
         findings += f
         meta.update(m)
@@ -115,11 +124,14 @@ def run_assessment(db: Session, company: Company, *, skip_web: bool = False,
         meta["webScanner"] = "skipped"
 
     # 2. Infra/cloud connectors (decrypt in memory)
+    _names = {"aws": "AWS", "azure": "Azure", "intune": "Intune/Defender", "gcp": "Google Cloud",
+              "adgpo": "AD/GPO", "firewall": "Firewall"}
     for conn in company.connectors:
         prov = conn.provider
         if prov not in _SCANNERS or not (conn.consent or {}).get("granted"):
             meta[f"{prov}Connector"] = "configured but not consented" if conn.consent is not None else "skipped"
             continue
+        tell(f"Checking {_names.get(prov, prov)} (read-only, consented)…")
         creds = {**(conn.public_config or {}), **decrypt_secret(conn.secret_enc), "consent": conn.consent}
         mod = __import__(_SCANNERS[prov], fromlist=["run_checks"])
         try:
@@ -131,12 +143,14 @@ def run_assessment(db: Session, company: Company, *, skip_web: bool = False,
             meta[f"{prov}Connector"] = f"error: {type(ex).__name__}"
 
     # 3. Resolve controls
+    tell("Merging questionnaire declarations…")
     assertions = _assertions(db, company.id)
     overrides = company.applicability_overrides or {}
     web_by_check: dict = {}
     for fnd in findings:
         web_by_check.setdefault(fnd.get("webCheckId"), []).append(fnd)
 
+    tell(f"Resolving all {len(rb['controls'])} checkpoints (scanner findings beat declarations)…")
     resolutions = []
     for c in rb["controls"]:
         r = engine.resolve(c, web_by_check, assertions, overrides)
@@ -161,3 +175,56 @@ def run_assessment(db: Session, company: Company, *, skip_web: bool = False,
     db.commit()
     db.refresh(row)
     return row
+
+
+# ---- Narrated background assessment (the "something is happening" window) ----
+
+def start_assessment_job(db: Session, company: Company, *, skip_web: bool,
+                         actor_email: str):
+    """Kick off an assessment in a background thread and return its job row.
+    The operator watches a live progress page instead of a frozen browser."""
+    import threading
+    from ..models import AssessJob
+
+    job = AssessJob(company_id=company.id, status="queued", stage="Queued",
+                    created_by=actor_email)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    t = threading.Thread(target=_run_assessment_job,
+                         args=(job.id, company.id, skip_web, actor_email), daemon=True)
+    t.start()
+    return job
+
+
+def _job_set(job_id: str, **fields) -> None:
+    from ..db import SessionLocal
+    from ..models import AssessJob
+    with SessionLocal() as s:
+        j = s.get(AssessJob, job_id)
+        if j:
+            for k, v in fields.items():
+                setattr(j, k, v)
+            s.commit()
+
+
+def _run_assessment_job(job_id: str, company_id: str, skip_web: bool,
+                        actor_email: str) -> None:
+    from datetime import datetime, timezone
+    from ..db import SessionLocal
+    try:
+        _job_set(job_id, status="running", stage="Starting the assessment engine…")
+        with SessionLocal() as s:
+            company = s.get(Company, company_id)
+            snap, alerts = run_and_notify(
+                s, company, skip_web=skip_web, actor_email=actor_email,
+                progress=lambda stage: _job_set(job_id, stage=stage))
+            score, scan_id, n_alerts = snap.score, snap.scan_id, len(alerts)
+        _job_set(job_id, status="done", stage="Finished", scan_id=scan_id, score=score,
+                 alerts=n_alerts, finished_at=datetime.now(timezone.utc),
+                 note=(f"⚠ {n_alerts} change(s) flagged — the client was alerted."
+                       if n_alerts else "Client notified that the report is ready."))
+    except Exception as ex:  # never leave a job stuck in 'running'
+        _job_set(job_id, status="error", stage="Assessment failed",
+                 note=f"{type(ex).__name__}: {ex}",
+                 finished_at=datetime.now(timezone.utc))

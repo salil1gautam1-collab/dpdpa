@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Assessment running{% endblock %}
+{% block head %}{% if refresh %}<meta http-equiv="refresh" content="2">{% endif %}{% endblock %}
+{% block body %}
+<p class="small"><a href="/companies/{{ c.id }}">← {{ c.name }}</a></p>
+<h1>Assessment — {{ c.name }}</h1>
+<p class="small">Started {{ j.created_at.strftime('%Y-%m-%d %H:%M') }} UTC by {{ j.created_by }}</p>
+
+{% if j.status in ('queued', 'running') %}
+<div class="card">
+  <h3 style="margin-top:0">⚙️ Working…</h3>
+  <p style="font-size:15px"><span class="ndot" style="margin-right:10px"></span>{{ j.stage }}</p>
+  <p class="small" style="margin-top:14px">This page updates itself every couple of seconds.
+    Feel free to browse anywhere else — the assessment keeps running on the server, and the
+    company page shows it in progress until it's done.</p>
+</div>
+
+{% elif j.status == 'done' %}
+<div class="card" style="border-color:var(--ok)">
+  <h3 style="margin-top:0">✅ Assessment complete — score {{ j.score }}%</h3>
+  <p class="small">{{ j.note }}</p>
+  <div class="rowbtns" style="margin-top:12px">
+    <a class="btn" href="/companies/{{ c.id }}/report/{{ j.scan_id }}">📕 Open the report</a>
+    <a class="btn gray" href="/companies/{{ c.id }}">← Back to {{ c.name }}</a>
+    {% if j.alerts %}<a class="btn indigo" href="/companies/{{ c.id }}">⚠ See the {{ j.alerts }} alert(s)</a>{% endif %}
+  </div>
+</div>
+
+{% else %}
+<div class="card" style="border-color:var(--bad)">
+  <h3 style="margin-top:0">⚠ Assessment could not finish</h3>
+  <p class="small">{{ j.stage }}{% if j.note %} — {{ j.note }}{% endif %}</p>
+  <p><a class="btn sm" href="/companies/{{ c.id }}">← Back to {{ c.name }}</a></p>
+</div>
+{% endif %}
+{% endblock %}
