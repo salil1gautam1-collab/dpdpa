@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Help{% endblock %}
 {% block body %}
+<div class="rowbtns" style="margin-bottom:6px">
+  {% set labels = {'handbook': '📖 Handbook', 'architecture': '🏗 Architecture', 'handoff': '🤝 Handoff'} %}
+  {% for key in docs %}
+  <a class="btn sm {{ 'gray' if key != active_doc }}" href="/help/{{ key }}">{{ labels.get(key, key) }}</a>
+  {% endfor %}
+</div>
 <div class="helpdoc">
 {{ content|safe }}
 </div>

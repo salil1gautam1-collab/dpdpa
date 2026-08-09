@@ -280,19 +280,27 @@ async def save_settings(request: Request, db: Session = Depends(get_db)):
     return redirect("/admin/settings", "Settings saved — effective immediately.")
 
 
-# ---- Help / handbook (any operator) ----
+# ---- Help / handbook / architecture (any operator) ----
+_HELP_DOCS = {"handbook": "HANDBOOK.md", "architecture": "ARCHITECTURE.md",
+              "handoff": "HANDOFF.md"}
+
+
 @router.get("/help")
-def help_page(request: Request, db: Session = Depends(get_db)):
+@router.get("/help/{doc}")
+def help_page(request: Request, doc: str = "handbook", db: Session = Depends(get_db)):
     require(request, db, operator=True)
     from pathlib import Path
     import markdown as _md
-    src = Path(__file__).resolve().parent.parent.parent / "docs" / "HANDBOOK.md"
+    fname = _HELP_DOCS.get(doc)
+    if not fname:
+        raise HTTPException(404, "No such document")
+    src = Path(__file__).resolve().parent.parent.parent / "docs" / fname
     try:
         text = src.read_text(encoding="utf-8")
     except OSError:
-        raise HTTPException(404, "Handbook not found")
+        raise HTTPException(404, "Document not found")
     body = _md.markdown(text, extensions=["tables", "fenced_code", "toc"])
-    return render(request, "help.html", content=body)
+    return render(request, "help.html", content=body, active_doc=doc, docs=_HELP_DOCS)
 
 
 # ---- Audit (admin) ----
