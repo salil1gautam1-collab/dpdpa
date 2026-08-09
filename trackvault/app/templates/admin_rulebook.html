@@ -4,6 +4,41 @@
 <h1>Rulebook — the law, as data <span class="small">(CS / Legal)</span></h1>
 <p class="small">When MeitY updates the DPDP framework, import a new version here. Existing assessments are
 untouched; the next assessment a company runs uses the latest version. Nothing changes silently.</p>
+
+<div class="card" style="border-color:var(--acc)">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <h3 style="margin:0">📡 Regulatory watch
+      {% if watch_new %}<span class="badge b-GAP">{{ watch_new }} new</span>{% endif %}</h3>
+    <form method="post" action="/admin/regwatch/check" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn sm">Check official sources now</button>
+    </form>
+  </div>
+  <p class="small">The app watches the configured official pages (MeitY etc.) for documents mentioning the
+    DPDP framework and lists anything new here. Detection is automated; <b>judgment stays human</b> — read the
+    document, and if the law moved, publish a new rulebook version below. Last check: <b>{{ watch_last }}</b>.
+    Sources are managed in <a href="/admin/settings">Settings</a>.</p>
+  {% if watch_items %}
+  <div class="overflow"><table>
+    <tr><th>First seen</th><th>Document</th><th>Source</th><th style="width:120px"></th></tr>
+    {% for i in watch_items %}
+    <tr>
+      <td class="tag">{{ i.first_seen.strftime('%Y-%m-%d') }}</td>
+      <td class="small"><a href="{{ i.url }}" target="_blank" rel="noopener noreferrer">{{ i.title }}</a>
+        {% if i.status == 'reviewed' %}<br><span class="small">reviewed by {{ i.reviewed_by }}</span>{% endif %}</td>
+      <td class="small">{{ i.source | replace('https://','') | truncate(34) }}</td>
+      <td>{% if i.status == 'new' %}
+        <form method="post" action="/admin/regwatch/{{ i.id }}/reviewed" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn sm gray">Mark reviewed</button></form>
+        {% else %}<span class="badge b-COMPLIANT">reviewed</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <p class="small">No items yet — run a check, or wait for the scheduled one.</p>
+  {% endif %}
+</div>
 <div class="overflow">
 <table>
   <tr><th>Version</th><th>Controls</th><th>Categories</th><th>Updated</th><th>Source</th></tr>

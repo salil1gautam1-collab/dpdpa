@@ -84,6 +84,7 @@ With a managed database, use the provider's automated backups instead.
 
 ```bash
 docker compose exec app python -m app.ops monitor               # hourly/daily — re-assess due companies & fire alerts
+docker compose exec app python -m app.ops watch                 # daily — regulatory watch: new DPDP documents on official sources
 docker compose exec app python -m app.ops purge-sessions        # daily
 docker compose exec app python -m app.ops retention --months 24 --apply   # monthly
 docker compose exec app python -m app.ops erase --company <id>  # on engagement end / erasure request

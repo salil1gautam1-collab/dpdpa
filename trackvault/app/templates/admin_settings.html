@@ -28,6 +28,11 @@ in the server environment and aren't editable here.</p>
       <b style="color:var(--ok)">Live</b> — emails go to each customer's own login address.{% endif %}
       Set an address to redirect everything there while testing; clear it to send to real customers.</p>
 
+    <label style="margin-top:14px">Regulatory watch — official sources <span class="small">(one URL per line)</span></label>
+    <textarea name="reg_sources" rows="3" style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px">{{ reg_sources }}</textarea>
+    <p class="small" style="margin:4px 0 0">Pages the app checks for new DPDP notifications (MeitY, eGazette,
+    Data Protection Board). Findings appear on the <a href="/admin/rulebook">Rulebook</a> page.</p>
+
     <p style="margin-top:16px"><button class="btn green" type="submit">Save settings</button></p>
   </form>
 </div>

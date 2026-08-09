@@ -212,6 +212,20 @@ class ImportJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class RegWatchItem(Base):
+    """A document spotted on an official source (MeitY / eGazette / DPB) that may
+    affect the rulebook. Detection is automated; judgment stays human: CS/Legal
+    review the item and, if it changes the law, publish a new rulebook version."""
+    __tablename__ = "reg_watch_items"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    source: Mapped[str] = mapped_column(String(255), default="")
+    url: Mapped[str] = mapped_column(String(1000), nullable=False, unique=True)
+    title: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(12), default="new", index=True)  # new|reviewed
+    reviewed_by: Mapped[str] = mapped_column(String(255), default="")
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class AppSetting(Base):
     """Runtime-editable settings (operational toggles). Secrets stay in env."""
     __tablename__ = "app_settings"

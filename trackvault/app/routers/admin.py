@@ -78,10 +78,50 @@ def rulebook_page(request: Request, db: Session = Depends(get_db)):
         except Exception:
             return "5.0.0"
     cats = current.data.get("categories", []) if current else []
+    from ..models import RegWatchItem
+    from ..services.reg_watch import get_sources, last_check
+    watch_items = list(db.execute(select(RegWatchItem)
+                                  .order_by(RegWatchItem.status.desc(), RegWatchItem.first_seen.desc())
+                                  .limit(30)).scalars())
+    watch_new = sum(1 for i in watch_items if i.status == "new")
     return render(request, "admin_rulebook.html", books=list(reversed(books)),
                   current=current, next_version=bump(current.version) if current else "1.0.0",
                   categories=cats, severities=["critical", "high", "medium", "low"],
-                  methods=["questionnaire", "evidence", "hybrid", "web"])
+                  methods=["questionnaire", "evidence", "hybrid", "web"],
+                  watch_items=watch_items, watch_new=watch_new,
+                  watch_sources=get_sources(db), watch_last=last_check(db))
+
+
+@router.post("/admin/regwatch/check")
+async def regwatch_check(request: Request, db: Session = Depends(get_db)):
+    p = require(request, db, roles=RULEBOOK_ROLES)
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    from ..services.reg_watch import check_now
+    res = check_now(db)
+    record(db, action="regwatch.check", actor=p.user, target_type="regwatch", target_id="manual",
+           ip=getattr(request.state, "client_ip", ""), new=res["new"], errors=len(res["errors"]))
+    msg = (f"Checked official sources — {res['new']} new item(s) found."
+           if res["new"] else "Checked official sources — nothing new since last time.")
+    if res["errors"]:
+        msg += f" ({len(res['errors'])} source(s) unreachable — government sites do that; try later.)"
+    return redirect("/admin/rulebook", msg)
+
+
+@router.post("/admin/regwatch/{item_id}/reviewed")
+async def regwatch_reviewed(item_id: str, request: Request, db: Session = Depends(get_db)):
+    p = require(request, db, roles=RULEBOOK_ROLES)
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    from ..models import RegWatchItem
+    item = db.get(RegWatchItem, item_id)
+    if item:
+        item.status = "reviewed"
+        item.reviewed_by = p.user.email
+        db.commit()
+        record(db, action="regwatch.reviewed", actor=p.user, target_type="regwatch",
+               target_id=item_id, ip=getattr(request.state, "client_ip", ""))
+    return redirect("/admin/rulebook", "Marked as reviewed.")
 
 
 @router.post("/admin/rulebook/add-checkpoint")
@@ -203,9 +243,11 @@ def blank_template(request: Request, db: Session = Depends(get_db)):
 def settings_page(request: Request, db: Session = Depends(get_db)):
     p = require(request, db, roles={Role.admin})
     from ..services.settings_service import effective_email_config, smtp_ready, get_ui_theme, VALID_THEMES
+    from ..services.reg_watch import get_sources
     cfg = effective_email_config(db)
     return render(request, "admin_settings.html", cfg=cfg, smtp_ready=smtp_ready(cfg),
-                  ui_theme=get_ui_theme(db), themes=VALID_THEMES)
+                  ui_theme=get_ui_theme(db), themes=VALID_THEMES,
+                  reg_sources="\n".join(get_sources(db)))
 
 
 @router.post("/admin/settings/theme")
@@ -229,6 +271,8 @@ async def save_settings(request: Request, db: Session = Depends(get_db)):
     set_raw(db, "email_enabled", "true" if form.get("email_enabled") else "false")
     set_raw(db, "email_from", (form.get("email_from", "") or "").strip())
     set_raw(db, "test_recipient", (form.get("test_recipient", "") or "").strip())
+    if form.get("reg_sources") is not None:
+        set_raw(db, "reg_sources", (form.get("reg_sources", "") or "").strip())
     record(db, action="settings.update", actor=p.user, target_type="settings", target_id="email",
            ip=getattr(request.state, "client_ip", ""),
            email_enabled=bool(form.get("email_enabled")),

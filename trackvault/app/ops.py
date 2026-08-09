@@ -108,11 +108,29 @@ def erase(company_id: str) -> None:
         db.close()
 
 
+def watch() -> None:
+    """Scheduled regulatory watch: scan official sources for new DPDP documents.
+    Run daily from cron alongside `monitor`."""
+    db = SessionLocal()
+    try:
+        from .services.reg_watch import check_now
+        res = check_now(db)
+        print(f"regulatory watch: {res['new']} new item(s); "
+              f"{len(res['errors'])} source error(s)")
+        for t in res["titles"]:
+            print("  new:", t)
+        for e in res["errors"]:
+            print("  err:", e)
+    finally:
+        db.close()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="app.ops")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("purge-sessions")
     sub.add_parser("monitor")
+    sub.add_parser("watch")
     r = sub.add_parser("retention")
     r.add_argument("--months", type=int, default=24)
     r.add_argument("--apply", action="store_true")
@@ -124,6 +142,8 @@ def main() -> None:
         purge_sessions()
     elif args.cmd == "monitor":
         monitor()
+    elif args.cmd == "watch":
+        watch()
     elif args.cmd == "retention":
         retention(args.months, args.apply)
     elif args.cmd == "erase":
