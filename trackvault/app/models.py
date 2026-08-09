@@ -100,6 +100,8 @@ class Company(Base):
     applicability_overrides: Mapped[dict] = mapped_column(JSONB, default=dict)
     pending_assessment: Mapped[bool] = mapped_column(Boolean, default=False)
     submission: Mapped[dict] = mapped_column(JSONB, default=dict)
+    monitor_frequency: Mapped[str] = mapped_column(String(12), default="off")  # off|weekly|monthly
+    next_monitor_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     connectors: Mapped[list["Connector"]] = relationship(back_populates="company", cascade="all, delete-orphan")

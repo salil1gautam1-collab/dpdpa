@@ -83,10 +83,16 @@ With a managed database, use the provider's automated backups instead.
 ## Scheduled maintenance (cron)
 
 ```bash
+docker compose exec app python -m app.ops monitor               # hourly/daily — re-assess due companies & fire alerts
 docker compose exec app python -m app.ops purge-sessions        # daily
 docker compose exec app python -m app.ops retention --months 24 --apply   # monthly
 docker compose exec app python -m app.ops erase --company <id>  # on engagement end / erasure request
 ```
+
+**Monitoring:** set a company's monitoring to weekly/monthly in its workspace.
+Schedule `app.ops monitor` (e.g. hourly via cron) — it re-assesses every company
+whose schedule is due, and raises an alert (portal + email) if a checkpoint
+regressed, a new third-party tracker appeared, or the rulebook changed.
 
 ## Operating notes
 

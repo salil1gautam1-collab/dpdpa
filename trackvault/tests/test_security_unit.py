@@ -48,6 +48,22 @@ def test_engine_hybrid_scanner_gap_beats_declaration():
     assert "conflict" in res
 
 
+def test_alerts_detect_regression_and_new_tracker():
+    from app.services.alerts import compute_alerts
+    prev = {"rulebookVersion": "4.0.0",
+            "resolutions": [{"controlId": "SEC-01", "status": "COMPLIANT", "title": "Safeguards", "severity": "high"}],
+            "meta": {"trackersObserved": {"site": ["Google Analytics"]}}}
+    curr = {"rulebookVersion": "4.0.0",
+            "resolutions": [{"controlId": "SEC-01", "status": "GAP", "title": "Safeguards", "severity": "high"}],
+            "meta": {"trackersObserved": {"site": ["Google Analytics", "Meta Pixel"]}}}
+    alerts = compute_alerts(prev, curr)
+    types = {a["type"] for a in alerts}
+    assert "REGRESSION" in types
+    assert "NEW_THIRD_PARTY" in types
+    # a fresh baseline (no previous) yields no alerts
+    assert compute_alerts(None, curr) == []
+
+
 def test_engine_provenance_split():
     snap = {"resolutions": [
         {"status": "COMPLIANT", "basis": "web-scan"},     # automated

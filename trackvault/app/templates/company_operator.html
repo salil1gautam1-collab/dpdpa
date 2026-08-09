@@ -111,6 +111,35 @@ RET-01: partial: Retention schedule in draft"></textarea>
   </form>
 </div>
 
+<h2>Monitoring &amp; alerts</h2>
+<div class="card">
+  <p class="small" style="margin-top:0">Re-assess automatically on a schedule. If a checkpoint regresses, a new
+  third-party tracker appears, or the rulebook changes, {{ c.name }} (and the client) are alerted by portal and email.</p>
+  <form method="post" action="/companies/{{ c.id }}/monitoring">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="rowbtns" style="align-items:center">
+      <select name="frequency" style="max-width:200px">
+        <option value="off" {{ 'selected' if c.monitor_frequency in ['', 'off', none] }}>Off</option>
+        <option value="weekly" {{ 'selected' if c.monitor_frequency == 'weekly' }}>Weekly</option>
+        <option value="monthly" {{ 'selected' if c.monitor_frequency == 'monthly' }}>Monthly</option>
+      </select>
+      <button class="btn sm" type="submit">Save monitoring</button>
+      {% if c.monitor_frequency and c.monitor_frequency != 'off' %}
+      <span class="small">✅ {{ c.monitor_frequency }} · next run {{ c.next_monitor_at.strftime('%Y-%m-%d') if c.next_monitor_at else '—' }}</span>
+      {% endif %}
+    </div>
+  </form>
+  {% if recent_alerts %}
+  <h3 style="margin:14px 0 6px">Recent alerts</h3>
+  {% for a in recent_alerts %}
+  <div style="padding:6px 0;border-bottom:1px solid var(--line)">
+    <b style="color:var(--bad)">{{ a.title }}</b> <span class="small">{{ a.created_at.strftime('%Y-%m-%d') }}</span>
+    <div class="small" style="white-space:pre-wrap">{{ a.body[:260] }}</div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>
+
 <h2>Client access</h2>
 <div class="card">
   <form method="post" action="/companies/{{ c.id }}/client-login">

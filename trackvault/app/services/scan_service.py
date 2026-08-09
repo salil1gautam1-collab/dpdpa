@@ -28,6 +28,45 @@ _SCANNERS = {
 }
 
 
+def run_and_notify(db: Session, company: Company, *, skip_web: bool = False,
+                   actor_email: str = "") -> tuple[Snapshot, list]:
+    """Run an assessment, detect changes vs the previous snapshot, and notify the
+    client (report-ready, or an alert if something regressed/appeared). Shared by
+    the manual run route and the scheduled monitor."""
+    from .alerts import compute_alerts, summarize_alerts
+    from . import notify_service
+    from ..config import get_settings
+    from ..domain.engine import summarize
+    from ..models import Snapshot, User, Role
+
+    prev = db.execute(select(Snapshot).where(Snapshot.company_id == company.id)
+                      .order_by(Snapshot.scan_id.desc())).scalars().first()
+    prev_data = prev.data if prev else None
+    snap = run_assessment(db, company, skip_web=skip_web, actor_email=actor_email)
+    alerts = compute_alerts(prev_data, snap.data)
+
+    client = db.execute(select(User).where(User.company_id == company.id,
+                                           User.role == Role.client)).scalar_one_or_none()
+    s = summarize(snap.data)
+    d = snap.scan_id
+    date_fmt = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+    base = get_settings().base_url
+    email_to = client.email if client else ""
+    if alerts:
+        body = (f"Your latest DPDPA assessment ({date_fmt}) flagged {len(alerts)} change(s) that need "
+                f"attention:\n\n{summarize_alerts(alerts)}\n\nCompliance score: {s['complianceScore']}%.\n"
+                f"\nSign in: {base}/login\n")
+        notify_service.notify(db, company.id, "ALERT",
+                              f"⚠ {len(alerts)} change(s) need attention ({date_fmt})", body, email_to=email_to)
+    else:
+        body = (f"Your DPDPA compliance report dated {date_fmt} is available in your portal.\n\n"
+                f"Compliance score: {s['complianceScore']}% (gaps {s['counts']['GAP']}, "
+                f"partial {s['counts']['PARTIAL']}).\n\nSign in: {base}/login\n")
+        notify_service.notify(db, company.id, "REPORT READY", f"New report dated {date_fmt}",
+                              body, email_to=email_to)
+    return snap, alerts
+
+
 def unconfirmed_control_ids(db: Session, company_id: str):
     """Control ids the latest assessment could NOT confirm automatically (status TBC).
     Returns None if no assessment has run yet."""

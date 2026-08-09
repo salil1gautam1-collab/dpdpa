@@ -57,6 +57,36 @@ def retention(months: int, apply: bool) -> int:
         db.close()
 
 
+def monitor() -> int:
+    """Re-assess every company whose monitoring is due; alert on changes.
+    Intended to run on a schedule (cron / Task Scheduler), e.g. hourly or daily."""
+    from datetime import datetime, timedelta, timezone
+    from .services.scan_service import run_and_notify
+    db = SessionLocal()
+    ran = 0
+    try:
+        now = datetime.now(timezone.utc)
+        due = [c for c in db.execute(select(Company)).scalars()
+               if c.monitor_frequency in ("weekly", "monthly")
+               and c.next_monitor_at is not None and c.next_monitor_at <= now]
+        for c in due:
+            skip_web = not (c.sites and (c.scan_consent or {}).get("granted"))
+            try:
+                snap, alerts = run_and_notify(db, c, skip_web=skip_web, actor_email="monitor")
+                print(f"monitored {c.name}: score {snap.score}%, {len(alerts)} alert(s)")
+            except Exception as ex:  # pragma: no cover
+                print(f"monitor failed for {c.name}: {ex}")
+            days = 7 if c.monitor_frequency == "weekly" else 30
+            c.next_monitor_at = now + timedelta(days=days)
+            db.commit()
+            ran += 1
+        if not due:
+            print("no companies due for monitoring")
+        return ran
+    finally:
+        db.close()
+
+
 def erase(company_id: str) -> None:
     db = SessionLocal()
     try:
@@ -82,6 +112,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(prog="app.ops")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("purge-sessions")
+    sub.add_parser("monitor")
     r = sub.add_parser("retention")
     r.add_argument("--months", type=int, default=24)
     r.add_argument("--apply", action="store_true")
@@ -91,6 +122,8 @@ def main() -> None:
 
     if args.cmd == "purge-sessions":
         purge_sessions()
+    elif args.cmd == "monitor":
+        monitor()
     elif args.cmd == "retention":
         retention(args.months, args.apply)
     elif args.cmd == "erase":

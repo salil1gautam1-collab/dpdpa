@@ -87,8 +87,13 @@ def company_detail(cid: str, request: Request, db: Session = Depends(get_db)):
             if k.endswith("Connector") and v == "ran":
                 last_run.append(_labels.get(k[:-9], k[:-9]))
         last_run.append("📋 questionnaire")
+    from ..models import Notification
+    recent_alerts = list(db.execute(select(Notification).where(
+        Notification.company_id == cid, Notification.ntype == "ALERT")
+        .order_by(Notification.created_at.desc())).scalars())[:4]
     return render(request, "company_operator.html", c=c, snaps=snaps, latest=latest,
-                  answered=answered, total=len(rb["controls"]), connected=connected, last_run=last_run)
+                  answered=answered, total=len(rb["controls"]), connected=connected,
+                  last_run=last_run, recent_alerts=recent_alerts)
 
 
 @router.post("/companies/{cid}/consent")
@@ -113,30 +118,37 @@ def run_scan(cid: str, request: Request, skip_web: str = Form(""), csrf: str = F
     skip = bool(skip_web) or not c.sites
     if not skip and not (c.scan_consent or {}).get("granted"):
         return redirect(f"/companies/{cid}", "Record website scan authorisation first (or run questionnaire-only).", err=True)
-    prev = db.execute(select(Snapshot).where(Snapshot.company_id == cid)
-                      .order_by(Snapshot.scan_id.desc())).scalars().first()
-    prev_rb = prev.rulebook_version if prev else None
-    snap = run_assessment(db, c, skip_web=skip, actor_email=p.user.email)
+    from ..services.scan_service import run_and_notify
+    snap, alerts = run_and_notify(db, c, skip_web=skip, actor_email=p.user.email)
     record(db, action="assessment.run", actor=p.user, target_type="company", target_id=cid,
-           ip=getattr(request.state, "client_ip", ""), scanId=snap.scan_id, score=snap.score)
+           ip=getattr(request.state, "client_ip", ""), scanId=snap.scan_id, score=snap.score, alerts=len(alerts))
+    msg = f"Assessment complete — score {snap.score}%."
+    if alerts:
+        msg += f" ⚠ {len(alerts)} change(s) flagged and the client was alerted."
+    else:
+        msg += " Client notified."
+    return redirect(f"/companies/{cid}", msg)
 
-    # Notify the client user (if one is linked)
-    client_user = db.execute(select(User).where(User.company_id == cid, User.role == Role.client)).scalar_one_or_none()
-    if client_user:
-        s = summarize(snap.data)
-        d = snap.scan_id[:8]
-        body = (f"Your DPDPA compliance report dated {d[:4]}-{d[4:6]}-{d[6:8]} is available in your "
-                f"{_s.brand} portal.\n\nCompliance score: {s['complianceScore']}% "
-                f"(gaps {s['counts']['GAP']}, partial {s['counts']['PARTIAL']}).\n")
-        rb_changed = prev_rb and prev_rb != snap.rulebook_version
-        if rb_changed:
-            body += f"\nThis assessment reflects an updated rulebook (v{snap.rulebook_version}).\n"
-        body += f"\nSign in: {_s.base_url}/login\n"
-        notify_service.notify(db, cid, "REPORT READY",
-                              f"New report dated {d[:4]}-{d[4:6]}-{d[6:8]}"
-                              + (" (updated for new rules)" if rb_changed else ""),
-                              body, email_to=client_user.email)
-    return redirect(f"/companies/{cid}", f"Assessment complete — score {snap.score}%. Client notified.")
+
+@router.post("/companies/{cid}/monitoring")
+def set_monitoring(cid: str, request: Request, frequency: str = Form("off"), csrf: str = Form(""),
+                   db: Session = Depends(get_db)):
+    from datetime import datetime, timedelta, timezone
+    p = require(request, db, roles={Role.admin, Role.analyst})
+    c = _company_or_404(db, p.user.organization_id, cid)
+    check_csrf(p, csrf)
+    freq = frequency if frequency in ("off", "weekly", "monthly") else "off"
+    c.monitor_frequency = freq
+    if freq == "off":
+        c.next_monitor_at = None
+    else:
+        days = 7 if freq == "weekly" else 30
+        c.next_monitor_at = datetime.now(timezone.utc) + timedelta(days=days)
+    db.commit()
+    record(db, action="monitoring.set", actor=p.user, target_type="company", target_id=cid,
+           ip=getattr(request.state, "client_ip", ""), frequency=freq)
+    return redirect(f"/companies/{cid}",
+                    f"Monitoring set to {freq}." + ("" if freq == "off" else " It will re-assess automatically and alert on changes."))
 
 
 @router.get("/companies/{cid}/questionnaire")
