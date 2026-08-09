@@ -193,6 +193,25 @@ class AiSuggestion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class ImportJob(Base):
+    """A background document-conversion job: any customer document in, an
+    import-ready, human-reviewed set of checkpoint answers out. Large documents
+    convert chunk by chunk with visible progress instead of blocking a request."""
+    __tablename__ = "import_jobs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    company_id: Mapped[str] = mapped_column(ForeignKey("companies.id"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), default="")
+    status: Mapped[str] = mapped_column(String(12), default="queued")  # queued|running|done|error
+    stage: Mapped[str] = mapped_column(String(120), default="")        # human-readable progress line
+    total_chunks: Mapped[int] = mapped_column(Integer, default=0)
+    done_chunks: Mapped[int] = mapped_column(Integer, default=0)
+    found: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AppSetting(Base):
     """Runtime-editable settings (operational toggles). Secrets stay in env."""
     __tablename__ = "app_settings"

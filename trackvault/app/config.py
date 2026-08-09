@@ -48,11 +48,10 @@ class Settings(BaseSettings):
     ai_timeout: int = 120
     ai_max_doc_chars: int = 24000
     ai_max_chunks: int = 8
-    # Assisted document import (self-hosted LLM). Parked OFF by default: on a CPU-only
-    # host the 3B model is slow and low-yield. Flip on when running on a GPU / larger
-    # model, or when a faster provider is wired in. The deterministic template + paste
-    # import remains the reliable primary path either way.
-    ai_import_enabled: bool = False
+    # Document conversion (background pipeline: deterministic parse first, then the
+    # self-hosted reader passage by passage). ON by default — the old synchronous
+    # flow that blocked the browser is gone. Acts as a kill switch if ever needed.
+    ai_import_enabled: bool = True
 
     # SMTP (email notifications). Blank host -> simulated (nothing sent).
     smtp_host: str = ""

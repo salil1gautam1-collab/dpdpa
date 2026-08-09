@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Document conversion{% endblock %}
+{% block head %}{% if refresh %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block body %}
+<p class="small"><a href="/companies/{{ c.id }}">← {{ c.name }}</a></p>
+<h1>Document conversion</h1>
+<p class="small">Source: <b>{{ j.filename }}</b> · started {{ j.created_at.strftime('%Y-%m-%d %H:%M') }} UTC
+  by {{ j.created_by }}</p>
+
+{% if j.status in ('queued', 'running') %}
+<div class="card">
+  <h3 style="margin-top:0">⏳ Converting…</h3>
+  <p class="small">{{ j.stage }}</p>
+  {% if j.total_chunks %}
+  {% set pct = (j.done_chunks * 100 // j.total_chunks) if j.total_chunks else 0 %}
+  <div style="background:var(--track);border-radius:8px;height:14px;overflow:hidden;max-width:560px">
+    <div style="background:var(--acc);height:100%;width:{{ pct }}%"></div>
+  </div>
+  <p class="small" style="margin-top:8px">Passage {{ j.done_chunks }} of {{ j.total_chunks }}
+    · <b>{{ j.found }}</b> answer(s) found so far</p>
+  {% endif %}
+  <p class="small" style="margin-top:14px">This page refreshes itself every few seconds. You can
+    leave and come back — the conversion keeps running on the server.</p>
+</div>
+
+{% elif j.status == 'done' %}
+<div class="card" style="border-color:var(--ok)">
+  <h3 style="margin-top:0">✅ Conversion finished — {{ j.found }} answer(s)</h3>
+  <p class="small">{{ j.note }}</p>
+  {% if j.found %}
+  <div class="rowbtns" style="margin-top:12px">
+    <a class="btn" href="/companies/{{ c.id }}/ai-review">Review &amp; apply →</a>
+    <a class="btn gray" href="/companies/{{ c.id }}/convert/{{ j.id }}/download">⬇ Download converted Excel</a>
+  </div>
+  <p class="small" style="margin-top:12px">Nothing touches the questionnaire until you approve it
+    on the review screen. The Excel is the converted document — check it, correct it, keep it, or
+    re-import it later.</p>
+  {% endif %}
+</div>
+
+{% else %}
+<div class="card" style="border-color:var(--bad)">
+  <h3 style="margin-top:0">⚠ Conversion could not finish</h3>
+  <p class="small">{{ j.stage }}{% if j.note %} — {{ j.note }}{% endif %}</p>
+  <p class="small">The template and paste import on the company page always work as a fallback.</p>
+  <p><a class="btn sm" href="/companies/{{ c.id }}">← Back to {{ c.name }}</a></p>
+</div>
+{% endif %}
+{% endblock %}
