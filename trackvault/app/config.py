@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     bootstrap_admin_email: str = "admin@trackvault.local"
     bootstrap_admin_password: str = "ChangeMe!Admin2026"
 
+    # AI-assisted import (self-hosted LLM by default — no data leaves your environment).
+    # provider: "ollama" (self-hosted) | "none" (feature disabled)
+    ai_provider: str = "ollama"
+    ai_base_url: str = "http://ollama:11434"
+    ai_model: str = "llama3.2:3b"
+    ai_timeout: int = 120
+    ai_max_doc_chars: int = 24000
+
     # SMTP (email notifications). Blank host -> simulated (nothing sent).
     smtp_host: str = ""
     smtp_port: int = 587

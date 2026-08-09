@@ -33,9 +33,23 @@ services:
       TRACKVAULT_SMTP_PASS: ${TRACKVAULT_SMTP_PASS:-}
       TRACKVAULT_SMTP_FROM: ${TRACKVAULT_SMTP_FROM:-info@dedicatusit.com}
       TRACKVAULT_TEST_RECIPIENT: ${TRACKVAULT_TEST_RECIPIENT:-}
+      TRACKVAULT_AI_PROVIDER: ${TRACKVAULT_AI_PROVIDER:-ollama}
+      TRACKVAULT_AI_BASE_URL: ${TRACKVAULT_AI_BASE_URL:-http://ollama:11434}
+      TRACKVAULT_AI_MODEL: ${TRACKVAULT_AI_MODEL:-llama3.2:3b}
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
 
+  # Self-hosted LLM for intelligent import. Data never leaves this stack.
+  # Start with:  docker compose --profile ai up -d
+  # Then pull a model:  docker compose exec ollama ollama pull llama3.2:3b
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ai"]
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  ollama_models:

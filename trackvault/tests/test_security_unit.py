@@ -48,6 +48,21 @@ def test_engine_hybrid_scanner_gap_beats_declaration():
     assert "conflict" in res
 
 
+def test_engine_provenance_split():
+    snap = {"resolutions": [
+        {"status": "COMPLIANT", "basis": "web-scan"},     # automated
+        {"status": "GAP", "basis": "hybrid"},              # automated
+        {"status": "GAP", "basis": "questionnaire"},       # manual
+        {"status": "PARTIAL", "basis": "evidence"},        # manual
+        {"status": "TBC", "basis": "web-scan"},            # unconfirmed
+    ]}
+    pv = engine.provenance(snap)
+    assert pv["automated"] == 2
+    assert pv["manual"] == 2
+    assert pv["unconfirmed"] == 1
+    assert pv["automatedPct"] == 50.0
+
+
 def test_engine_summary_score():
     snap = {"resolutions": [
         {"status": "COMPLIANT", "category": "NT"},

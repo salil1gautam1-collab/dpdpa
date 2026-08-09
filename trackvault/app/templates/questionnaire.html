@@ -3,8 +3,16 @@
 {% block body %}
 <p class="small"><a href="{{ back }}">← back</a></p>
 <h1>Questionnaire — {{ c.name }}</h1>
+{% if filtered %}
+<div class="banner warn">🎯 <b>Showing only the {{ controls|length }} checkpoints automation couldn't confirm.</b>
+Run the assessment first, and this list is everything that's left for you to answer manually — the rest was
+verified by the scan. <a href="{{ full_link }}">Show all checkpoints instead</a>.</div>
+{% else %}
 <p class="small">Declare the controls we can't verify from outside. A declaration can confirm an automated
-signal but never overrides a scanner-observed gap. Leave a row unanswered to keep it "to be confirmed".</p>
+signal but never overrides a scanner-observed gap. Leave a row unanswered to keep it "to be confirmed".
+{% if unconfirmed_count %}<br>💡 Tip: run the assessment first, then
+<a href="{{ action }}?only=unconfirmed">answer only the {{ unconfirmed_count }} items automation couldn't confirm</a>.{% endif %}</p>
+{% endif %}
 <form method="post" action="{{ action }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <div class="overflow">

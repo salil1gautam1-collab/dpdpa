@@ -77,6 +77,24 @@ def resolve(control: dict, web_by_check: dict, assertions: dict, overrides: dict
     return res
 
 
+def provenance(snapshot: dict) -> dict:
+    """How each checkpoint was assessed: automatically (scan/connectors),
+    from the client's declarations (questionnaire), or unconfirmed (needs manual input)."""
+    auto = manual = unconfirmed = 0
+    for r in snapshot["resolutions"]:
+        if r["status"] == "TBC":
+            unconfirmed += 1
+        elif r.get("basis") in ("web-scan", "hybrid"):
+            auto += 1
+        else:  # questionnaire / evidence / override
+            manual += 1
+    determined = auto + manual
+    auto_pct = round(100 * auto / determined, 1) if determined else 0.0
+    manual_pct = round(100 * manual / determined, 1) if determined else 0.0
+    return {"automated": auto, "manual": manual, "unconfirmed": unconfirmed,
+            "determined": determined, "automatedPct": auto_pct, "manualPct": manual_pct}
+
+
 def summarize(snapshot: dict) -> dict:
     counts = {"COMPLIANT": 0, "PARTIAL": 0, "GAP": 0, "NA": 0, "TBC": 0}
     by_cat: dict = {}

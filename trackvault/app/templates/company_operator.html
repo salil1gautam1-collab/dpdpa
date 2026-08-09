@@ -56,10 +56,15 @@
   {% endif %}
   {% endif %}
   <a class="btn" href="/companies/{{ c.id }}/questionnaire">✎ Questionnaire ({{ answered }}/{{ total }})</a>
+  {% if latest and latest.counts.TBC %}
+  <a class="btn" style="background:#5c6bc0" href="/companies/{{ c.id }}/questionnaire?only=unconfirmed">🎯 Confirm what automation couldn't ({{ latest.counts.TBC }})</a>
+  {% endif %}
   <a class="btn" href="/companies/{{ c.id }}/connectors">🔑 Connectors</a>
   <a class="btn gray" href="/companies/{{ c.id }}/history">History &amp; compare</a>
 </div>
-<p class="small"><b>▶ Run full assessment</b> = website + all connected systems + questionnaire.
+<p class="small"><b>Recommended flow:</b> ① run the assessment (automation does as much as it can) → ② open
+<b>🎯 Confirm what automation couldn't</b> to answer only what's left → ③ re-run to finalise.<br>
+<b>▶ Run full assessment</b> = website + all connected systems + questionnaire.
 <b>Run without website scan</b> does the same but skips only the public website crawl — your connectors still run.</p>
 
 <h2>Send &amp; import the questionnaire</h2>
@@ -70,9 +75,21 @@
     <b>N/A</b>, plus the consent statement. Email it to the customer to fill in.</p>
   <a class="btn" href="/companies/{{ c.id }}/questionnaire-template.xlsx">⬇ Download Excel template</a>
 </div>
+<div class="card" style="border-color:#5c6bc0">
+  <h3 style="margin-top:0">🤖 Intelligent import — read the customer's own document</h3>
+  <p class="small">Don't have it in our format? Upload the customer's <b>own</b> compliance document (Word, PDF,
+    Excel — their data sheet, auditor's report, gap register, in their own words). A <b>self-hosted</b> model
+    reads it and proposes which DPDPA checkpoints it answers — you then review and confirm each one. Nothing
+    leaves your environment; nothing is applied without your approval.</p>
+  <form method="post" action="/companies/{{ c.id }}/ai-import" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="file" name="file" accept=".docx,.pdf,.xlsx,.xlsm,.csv,.txt" required>
+    <p style="margin-top:12px"><button class="btn" type="submit" style="background:#5c6bc0">🤖 Analyse &amp; suggest answers</button></p>
+  </form>
+</div>
 <div class="card">
-  <h3 style="margin-top:0">📥 Step 2 — import their completed file</h3>
-  <p class="small">Upload the filled template (or any client data sheet), or paste simple rows. No coding needed.</p>
+  <h3 style="margin-top:0">📥 Direct import — file already in a usable format</h3>
+  <p class="small">If the file already has a control column + status column (like our template), upload it or paste simple rows — parsed directly, no AI.</p>
   <form method="post" action="/companies/{{ c.id }}/import" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ csrf }}">
 

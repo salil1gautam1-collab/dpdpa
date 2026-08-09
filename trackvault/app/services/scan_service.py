@@ -28,6 +28,18 @@ _SCANNERS = {
 }
 
 
+def unconfirmed_control_ids(db: Session, company_id: str):
+    """Control ids the latest assessment could NOT confirm automatically (status TBC).
+    Returns None if no assessment has run yet."""
+    from ..models import Snapshot as _Snap
+    latest = db.execute(select(_Snap).where(_Snap.company_id == company_id)
+                        .order_by(_Snap.scan_id.desc())).scalars().first()
+    if not latest:
+        return None
+    return {r["controlId"] for r in (latest.data or {}).get("resolutions", [])
+            if r.get("status") == "TBC"}
+
+
 def _assertions(db: Session, company_id: str) -> dict:
     out = {}
     rows = db.execute(select(QuestionnaireAnswer).where(

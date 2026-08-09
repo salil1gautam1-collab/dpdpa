@@ -148,9 +148,17 @@ def op_questionnaire(cid: str, request: Request, db: Session = Depends(get_db)):
         QuestionnaireAnswer.company_id == cid)).scalars()}
     cats = {x["id"]: x["name"] for x in rb["categories"]}
     from .client import VALID
-    return render(request, "questionnaire.html", c=c, controls=rb["controls"], cats=cats,
+    from ..services.scan_service import unconfirmed_control_ids
+    controls = rb["controls"]
+    unconfirmed = unconfirmed_control_ids(db, cid)
+    filtered = request.query_params.get("only") == "unconfirmed" and unconfirmed is not None
+    if filtered:
+        controls = [x for x in controls if x["id"] in unconfirmed]
+    return render(request, "questionnaire.html", c=c, controls=controls, cats=cats,
                   existing=existing, valid=sorted(VALID), back=f"/companies/{cid}",
-                  action=f"/companies/{cid}/questionnaire")
+                  action=f"/companies/{cid}/questionnaire", filtered=filtered,
+                  full_link=f"/companies/{cid}/questionnaire",
+                  unconfirmed_count=len(unconfirmed) if unconfirmed is not None else 0)
 
 
 @router.post("/companies/{cid}/questionnaire")

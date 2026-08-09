@@ -175,6 +175,22 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
+class AiSuggestion(Base):
+    """A pending AI-proposed questionnaire mapping, awaiting operator review.
+    Never applied automatically — the operator accepts/edits/rejects."""
+    __tablename__ = "ai_suggestions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    company_id: Mapped[str] = mapped_column(ForeignKey("companies.id"), nullable=False, index=True)
+    batch: Mapped[str] = mapped_column(String(36), default="", index=True)
+    control_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    source_quote: Mapped[str] = mapped_column(Text, default="")
+    confidence: Mapped[str] = mapped_column(String(10), default="")
+    source_name: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class AuditLog(Base):
     """Append-only audit trail. Never updated or deleted."""
     __tablename__ = "audit_log"

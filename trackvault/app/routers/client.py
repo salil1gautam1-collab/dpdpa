@@ -77,9 +77,17 @@ def questionnaire(request: Request, db: Session = Depends(get_db)):
     existing = {a.control_id: a for a in db.execute(select(QuestionnaireAnswer).where(
         QuestionnaireAnswer.company_id == c.id)).scalars()}
     cats = {x["id"]: x["name"] for x in rb["categories"]}
-    return render(request, "questionnaire.html", c=c, controls=rb["controls"], cats=cats,
+    from ..services.scan_service import unconfirmed_control_ids
+    controls = rb["controls"]
+    unconfirmed = unconfirmed_control_ids(db, c.id)
+    filtered = request.query_params.get("only") == "unconfirmed" and unconfirmed is not None
+    if filtered:
+        controls = [x for x in controls if x["id"] in unconfirmed]
+    return render(request, "questionnaire.html", c=c, controls=controls, cats=cats,
                   existing=existing, valid=sorted(VALID), back="/workspace",
-                  action="/workspace/questionnaire")
+                  action="/workspace/questionnaire", filtered=filtered,
+                  full_link="/workspace/questionnaire",
+                  unconfirmed_count=len(unconfirmed) if unconfirmed is not None else 0)
 
 
 @router.post("/workspace/questionnaire")

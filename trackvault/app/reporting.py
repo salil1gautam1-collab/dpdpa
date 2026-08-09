@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 
 from .config import get_settings
-from .domain.engine import summarize
+from .domain.engine import provenance, summarize
 
 STATUS_LABELS = {"COMPLIANT": "Compliant", "PARTIAL": "Partial", "GAP": "Gap",
                  "NA": "Not applicable", "TBC": "To be confirmed"}
@@ -64,8 +64,24 @@ def client_report(snap: dict, rulebook: dict, sites: list) -> str:
     color = "#1a7f37" if score >= 80 else "#b58900" if score >= 50 else "#c62828"
     cats = {c["id"]: c["name"] for c in rulebook["categories"]}
 
+    pv = provenance(snap)
     tiles = "".join(f'<div class="tile"><div class="n" style="color:{SCOL[k]}">{v}</div>'
                     f'<div class="l">{STATUS_LABELS[k]}</div></div>' for k, v in s["counts"].items())
+    apct, mpct = pv["automatedPct"], pv["manualPct"]
+    provenance_panel = f"""
+<h2 class="sec">How this assessment was gathered</h2>
+<p>Of the <b>{pv['determined']}</b> checkpoints that could be assessed,
+<b style="color:#1a7f37">{apct}%</b> were <b>independently verified by {_e(brand)} scans</b>
+(website, cloud and infrastructure connectors), and <b>{mpct}%</b> came from the organisation's own
+declarations. <b>{pv['unconfirmed']}</b> further checkpoint(s) could not be verified automatically and
+require manual confirmation (listed at the end).</p>
+<div style="display:flex;height:26px;border-radius:6px;overflow:hidden;font-family:Arial;font-size:12px;margin:12px 0;border:1px solid #dde5ed">
+<div style="width:{apct}%;background:#1a7f37;color:#fff;display:flex;align-items:center;justify-content:center">{apct}% automated</div>
+<div style="width:{mpct}%;background:#b58900;color:#fff;display:flex;align-items:center;justify-content:center">{mpct}% declared</div>
+</div>
+<p class="rec" style="font-size:12.5px">A higher automated share means stronger, evidence-backed assurance.
+Connecting more systems (cloud accounts, endpoints, directory, firewall) moves checkpoints from declared to
+independently verified — and reduces the manual effort required.</p>"""
     ranked = sorted(s["byCategory"].items(), key=lambda kv: -(kv[1]["GAP"] + kv[1]["PARTIAL"]))
     focus = "".join(f"<tr><td>{_e(cats.get(cid,cid))}</td><td>{c['GAP']}</td><td>{c['PARTIAL']}</td>"
                     f"<td>{c['COMPLIANT']}</td></tr>" for cid, c in ranked if c["GAP"] + c["PARTIAL"])
@@ -118,6 +134,7 @@ def client_report(snap: dict, rulebook: dict, sites: list) -> str:
 <div class="tiles">{tiles}</div>
 <h3 style="font-family:Arial;font-size:15px;color:#0d2137">Priority focus areas</h3>
 <table><tr><th>Area</th><th>Gaps</th><th>Partial</th><th>Compliant</th></tr>{focus or '<tr><td colspan=4>No open items.</td></tr>'}</table>
+{provenance_panel}
 <div class="pagebreak"></div><h2 class="sec">Detailed findings</h2>
 <p>Gaps and partial items first, each with evidence and a recommendation.</p>{''.join(cards)}
 {tbc_tbl}{na_tbl}

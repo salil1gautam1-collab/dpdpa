@@ -16,7 +16,7 @@ from .config import get_settings
 from .crypto import using_derived_key
 from .db import engine
 from . import ratelimit
-from .routers import admin, auth, client, companies, connectors, reports
+from .routers import admin, ai_import, auth, client, companies, connectors, reports
 from .templating import render
 
 logging.basicConfig(level=logging.INFO,
@@ -123,4 +123,5 @@ app.include_router(companies.router)
 app.include_router(client.router)
 app.include_router(connectors.router)
 app.include_router(reports.router)
+app.include_router(ai_import.router)
 app.include_router(admin.router)
