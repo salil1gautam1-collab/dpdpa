@@ -59,9 +59,13 @@ def retention(months: int, apply: bool) -> int:
 
 def monitor() -> int:
     """Re-assess every company whose monitoring is due; alert on changes.
+    Also runs the submit safety net (overdue customer submissions auto-run).
     Intended to run on a schedule (cron / Task Scheduler), e.g. hourly or daily."""
     from datetime import datetime, timedelta, timezone
-    from .services.scan_service import run_and_notify
+    from .services.scan_service import autorun_due, run_and_notify
+    n = autorun_due()
+    if n:
+        print(f"auto-ran {n} overdue submission(s)")
     db = SessionLocal()
     ran = 0
     try:

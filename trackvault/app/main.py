@@ -67,6 +67,25 @@ async def lifespan(app: FastAPI):
                             len(orphans) + len(a_orphans))
     except Exception:  # never block startup over cleanup
         log.exception("orphaned-job sweep failed")
+
+    # In-process ticker: every 10 minutes, auto-run assessments whose customer
+    # submissions have waited past TRACKVAULT_AUTORUN_HOURS. Race-safe across
+    # workers (SKIP LOCKED + one-job-per-company), so both workers may tick.
+    import threading
+
+    def _ticker():
+        import time
+        from .services.scan_service import autorun_due
+        while True:
+            time.sleep(600)
+            try:
+                n = autorun_due()
+                if n:
+                    log.info("auto-ran %d overdue assessment(s)", n)
+            except Exception:
+                log.exception("autorun ticker failed")
+
+    threading.Thread(target=_ticker, daemon=True).start()
     yield
 
 

@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     # flow that blocked the browser is gone. Acts as a kill switch if ever needed.
     ai_import_enabled: bool = True
 
+    # When a customer submits inputs: admins are emailed immediately; if no
+    # operator has run the assessment after this many hours, it auto-runs and
+    # the customer gets their report. 0 disables the auto-run safety net.
+    autorun_hours: int = 2
+
     # SMTP (email notifications). Blank host -> simulated (nothing sent).
     smtp_host: str = ""
     smtp_port: int = 587

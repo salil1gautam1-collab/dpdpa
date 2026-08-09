@@ -72,15 +72,40 @@ async def mark_read(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/workspace/submit-inputs")
 async def submit_inputs(request: Request, db: Session = Depends(get_db)):
+    from datetime import datetime, timezone
+    from ..config import get_settings
+    from ..models import Role, User
+    from ..services.notify_service import _send_email
+    from ..services.settings_service import effective_email_config
     p, c = _client_company(request, db)
     form = await request.form()
     check_csrf(p, form.get("csrf", ""))
-    c.submission = {"submitted": True, "at": date.today().isoformat(), "by": p.user.email}
+    c.submission = {"submitted": True, "at": datetime.now(timezone.utc).isoformat(),
+                    "by": p.user.email}
     c.pending_assessment = True
     db.commit()
     record(db, action="client.submit", actor=p.user, target_type="company", target_id=c.id,
            ip=getattr(request.state, "client_ip", ""))
-    return redirect("/workspace", "Thank you — your inputs are submitted. Your assessment team will prepare your report.")
+
+    # Tell the operator team immediately — the report clock starts now.
+    s = get_settings()
+    hours = s.autorun_hours
+    admins = [u.email for u in db.execute(select(User).where(
+        User.role == Role.admin, User.is_active.is_(True))).scalars()]
+    if admins:
+        auto_line = (f"If nobody runs it, it auto-runs and goes to the customer in about "
+                     f"{hours} hour(s)." if hours else "Auto-run is disabled — it waits for you.")
+        _send_email(", ".join(admins),
+                    f"Inputs submitted — {c.name}",
+                    (f"{p.user.email} just submitted inputs for {c.name}.\n\n"
+                     f"Review and run the assessment: {s.base_url}/companies/{c.id}\n\n"
+                     f"{auto_line}\n"),
+                    cfg=effective_email_config(db))
+
+    eta = (f" Your report is typically ready within {hours} hour(s) — we'll notify you here "
+           f"and by email the moment it is." if hours else
+           " Your assessment team will prepare your report and notify you when it's ready.")
+    return redirect("/workspace", f"Thank you — your inputs are submitted.{eta}")
 
 
 @router.get("/workspace/questionnaire")

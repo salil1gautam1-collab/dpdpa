@@ -24,7 +24,9 @@
 </div>
 
 {% if c.pending_assessment %}
-<div class="banner warn">🔔 Your inputs were submitted{% if c.submission %} on {{ c.submission.at }}{% endif %}. Your assessment team is preparing your report — it will appear below.</div>
+<div class="banner warn">🔔 Your inputs were submitted{% if c.submission and c.submission.at %} on {{ c.submission.at[:16].replace('T', ' at ') }} UTC{% endif %}.
+  Your assessment team is preparing your report — <b>typically ready within 1–2 hours</b>. It will
+  appear below, and you'll be notified here and by email.</div>
 {% endif %}
 
 <h2>Your report</h2>

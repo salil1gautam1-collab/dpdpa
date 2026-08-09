@@ -228,3 +228,75 @@ def _run_assessment_job(job_id: str, company_id: str, skip_web: bool,
         _job_set(job_id, status="error", stage="Assessment failed",
                  note=f"{type(ex).__name__}: {ex}",
                  finished_at=datetime.now(timezone.utc))
+
+
+def autorun_due() -> int:
+    """The submit safety net: if a customer's inputs have sat pending for more
+    than TRACKVAULT_AUTORUN_HOURS with no operator action, run the assessment
+    automatically so the customer still gets their report on time.
+
+    Called from the in-process ticker (main.py) and from `app.ops monitor`
+    (cron). Race-safe across workers: rows are taken with SKIP LOCKED and the
+    one-running-job-per-company check applies."""
+    from datetime import datetime, timedelta, timezone
+    from ..config import get_settings
+    from ..db import SessionLocal
+    from ..models import AssessJob
+
+    hours = get_settings().autorun_hours
+    if not hours:
+        return 0
+    started = 0
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        candidates = list(db.execute(
+            select(Company).where(Company.pending_assessment.is_(True))
+            .with_for_update(skip_locked=True)).scalars())
+        for c in candidates:
+            at_raw = (c.submission or {}).get("at", "")
+            try:
+                at = datetime.fromisoformat(at_raw)
+                if at.tzinfo is None:  # legacy date-only submissions
+                    at = at.replace(tzinfo=timezone.utc)
+            except ValueError:
+                at = now  # unparseable — treat as fresh, never loop-run
+            if now - at < timedelta(hours=hours):
+                continue
+            running = db.execute(select(AssessJob).where(
+                AssessJob.company_id == c.id,
+                AssessJob.status.in_(["queued", "running"]))).scalars().first()
+            if running:
+                continue
+            skip_web = not (c.sites and (c.scan_consent or {}).get("granted"))
+            job = AssessJob(company_id=c.id, status="queued", stage="Queued (auto-run)",
+                            created_by=f"auto-run ({hours}h after submission)")
+            db.add(job)
+            from ..models import AuditLog
+            db.add(AuditLog(actor_email="system", action="assessment.autorun",
+                            target_type="company", target_id=c.id,
+                            detail={"hours": hours, "submittedAt": at_raw}))
+            db.commit()
+            job_id, cid = job.id, c.id
+            started += 1
+    # Run OUTSIDE the locking session, and SYNCHRONOUSLY: callers are already
+    # background contexts (the ticker thread, or the ops CLI) — a spawned
+    # daemon thread would be killed when a short-lived CLI process exits.
+    if started:
+        for job_id, cid, skip in _pending_autorun_jobs():
+            _run_assessment_job(job_id, cid, skip, "auto-run")
+    return started
+
+
+def _pending_autorun_jobs():
+    from ..db import SessionLocal
+    from ..models import AssessJob
+    with SessionLocal() as db:
+        jobs = list(db.execute(select(AssessJob).where(
+            AssessJob.status == "queued",
+            AssessJob.created_by.like("auto-run%"))).scalars())
+        out = []
+        for j in jobs:
+            c = db.get(Company, j.company_id)
+            skip = not (c and c.sites and (c.scan_consent or {}).get("granted"))
+            out.append((j.id, j.company_id, skip))
+        return out
