@@ -18,6 +18,21 @@ _env = Environment(
 _settings = get_settings()
 
 
+def _asset_stamp() -> str:
+    """Content hash of the stylesheet, used as a cache-buster (?v=...) so browsers
+    fetch a fresh copy whenever the CSS actually changes — including changes that
+    ship without a version bump."""
+    import hashlib
+    try:
+        css = (Path(__file__).parent / "static" / "app.css").read_bytes()
+        return hashlib.md5(css).hexdigest()[:10]
+    except OSError:
+        return __version__
+
+
+_ASSET_STAMP = _asset_stamp()
+
+
 def render(request: Request, name: str, status_code: int = 200, **ctx) -> HTMLResponse:
     principal = getattr(request.state, "principal", None)
     from .services.settings_service import get_ui_theme
@@ -31,6 +46,7 @@ def render(request: Request, name: str, status_code: int = 200, **ctx) -> HTMLRe
         "flash": request.query_params.get("msg", ""),
         "flash_err": request.query_params.get("err") == "1",
         "ui_theme": get_ui_theme(),
+        "asset_v": _ASSET_STAMP,
     }
     base.update(ctx)
     return HTMLResponse(_env.get_template(name).render(**base), status_code=status_code)

@@ -31,31 +31,38 @@ def set_raw(db: Session, key: str, value: str) -> None:
 # ---- Appearance / theme (app-wide, admin-controlled) ----
 VALID_THEMES = ("dark", "light", "midnight")
 DEFAULT_THEME = "dark"
-_theme_cache: dict = {"v": None}
+# Short-TTL cache. The app runs multiple uvicorn workers, each its own process —
+# a forever-cache in one worker would never see a save made through another, so
+# the theme would look "stuck" for ~half of all requests. A few seconds of TTL
+# keeps renders cheap while every worker converges almost immediately.
+_THEME_TTL_SECONDS = 3.0
+_theme_cache: dict = {"v": None, "at": 0.0}
 
 
 def get_ui_theme(db: Session | None = None) -> str:
-    """The app-wide theme the admin has chosen (default: dark). Cached in-process
-    and refreshed on save, so it's cheap to read on every page render."""
+    """The app-wide theme the admin has chosen (default: dark)."""
+    import time
     if db is not None:
         val = get_raw(db, "ui_theme")
-        _theme_cache["v"] = val if val in VALID_THEMES else DEFAULT_THEME
+        _theme_cache.update(v=val if val in VALID_THEMES else DEFAULT_THEME, at=time.monotonic())
         return _theme_cache["v"]
-    if _theme_cache["v"] is None:
+    now = time.monotonic()
+    if _theme_cache["v"] is None or (now - _theme_cache["at"]) > _THEME_TTL_SECONDS:
         try:
             from ..db import SessionLocal
             with SessionLocal() as s:
                 val = get_raw(s, "ui_theme")
-            _theme_cache["v"] = val if val in VALID_THEMES else DEFAULT_THEME
+            _theme_cache.update(v=val if val in VALID_THEMES else DEFAULT_THEME, at=now)
         except Exception:
-            return DEFAULT_THEME  # DB not ready — render dark, don't cache
+            return _theme_cache["v"] or DEFAULT_THEME  # DB not ready — don't cache
     return _theme_cache["v"]
 
 
 def set_ui_theme(db: Session, value: str) -> str:
+    import time
     theme = value if value in VALID_THEMES else DEFAULT_THEME
     set_raw(db, "ui_theme", theme)
-    _theme_cache["v"] = theme
+    _theme_cache.update(v=theme, at=time.monotonic())
     return theme
 
 
