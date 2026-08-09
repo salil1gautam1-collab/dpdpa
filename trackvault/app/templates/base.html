@@ -17,6 +17,7 @@
           <a href="/dashboard">Companies</a>
           {% if user.role.value in ['admin','cs','legal'] %}<a href="/admin/rulebook">Rulebook</a>{% endif %}
           {% if user.role.value == 'admin' %}<a href="/admin/users">Users</a><a href="/admin/audit">Audit</a><a href="/admin/settings">Settings</a>{% endif %}
+          <a href="/help">Help</a>
         {% else %}
           <a href="/workspace">My assessment</a>
           <a href="/workspace/notifications">Notifications{% if notif_unread %} <span class="navbadge">{{ notif_unread }}</span>{% endif %}</a>

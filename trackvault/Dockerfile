@@ -10,6 +10,7 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
 COPY rulebooks ./rulebooks
+COPY docs ./docs
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 

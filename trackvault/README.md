@@ -5,6 +5,10 @@ maturity scorecard. The valuable domain logic (rulebook engine, six connectors,
 evidence model, reports) is carried over; the entire platform layer is rebuilt
 production-grade.
 
+**Start here:** [docs/HANDBOOK.md](docs/HANDBOOK.md) — the operator's handbook
+covering every feature (also available inside the app: sign in → **Help**).
+Deployment & ops: [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Stack
 
 - **FastAPI** (ASGI) behind Uvicorn workers — replaces the stdlib server

@@ -280,6 +280,21 @@ async def save_settings(request: Request, db: Session = Depends(get_db)):
     return redirect("/admin/settings", "Settings saved — effective immediately.")
 
 
+# ---- Help / handbook (any operator) ----
+@router.get("/help")
+def help_page(request: Request, db: Session = Depends(get_db)):
+    require(request, db, operator=True)
+    from pathlib import Path
+    import markdown as _md
+    src = Path(__file__).resolve().parent.parent.parent / "docs" / "HANDBOOK.md"
+    try:
+        text = src.read_text(encoding="utf-8")
+    except OSError:
+        raise HTTPException(404, "Handbook not found")
+    body = _md.markdown(text, extensions=["tables", "fenced_code", "toc"])
+    return render(request, "help.html", content=body)
+
+
 # ---- Audit (admin) ----
 @router.get("/admin/audit")
 def audit_page(request: Request, db: Session = Depends(get_db)):

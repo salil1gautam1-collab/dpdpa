@@ -417,6 +417,24 @@ transition:opacity .65s cubic-bezier(.16,1,.3,1),transform .65s cubic-bezier(.16
 .reveal.d1{transition-delay:.08s}.reveal.d2{transition-delay:.16s}.reveal.d3{transition-delay:.24s}
 @media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none}}
 
+/* ---- help / handbook ---- */
+.helpdoc{max-width:860px}
+.helpdoc h1{font-size:28px;margin:6px 0 10px}
+.helpdoc h2{font-size:20px;margin:34px 0 12px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.helpdoc h3{font-size:15.5px;margin:20px 0 8px}
+.helpdoc p,.helpdoc li{font-size:14px;line-height:1.65}
+.helpdoc li{margin:4px 0}
+.helpdoc code{background:var(--th-bg);border:1px solid var(--line);border-radius:5px;
+padding:1px 6px;font-size:12.5px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.helpdoc pre{background:var(--th-bg);border:1px solid var(--line);border-radius:8px;
+padding:12px 16px;overflow-x:auto}
+.helpdoc pre code{background:none;border:0;padding:0}
+.helpdoc table{margin:12px 0}
+.helpdoc blockquote{border-left:3px solid var(--acc);margin:12px 0;padding:4px 16px;
+color:var(--mut);background:var(--acc-soft);border-radius:0 8px 8px 0}
+.helpdoc hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+.helpdoc em{color:var(--mut)}
+
 /* ---- auth ---- */
 .authwrap{max-width:430px;margin:36px auto}
 .auth-hero{text-align:center;margin-bottom:8px}
