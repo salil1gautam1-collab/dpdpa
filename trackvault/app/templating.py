@@ -20,6 +20,7 @@ _settings = get_settings()
 
 def render(request: Request, name: str, status_code: int = 200, **ctx) -> HTMLResponse:
     principal = getattr(request.state, "principal", None)
+    from .services.settings_service import get_ui_theme
     base = {
         "request": request,
         "brand": _settings.brand,
@@ -29,6 +30,7 @@ def render(request: Request, name: str, status_code: int = 200, **ctx) -> HTMLRe
         "csrf": principal.session.csrf_token if principal else "",
         "flash": request.query_params.get("msg", ""),
         "flash_err": request.query_params.get("err") == "1",
+        "ui_theme": get_ui_theme(),
     }
     base.update(ctx)
     return HTMLResponse(_env.get_template(name).render(**base), status_code=status_code)

@@ -32,6 +32,23 @@ in the server environment and aren't editable here.</p>
   </form>
 </div>
 
+<h2>Appearance</h2>
+<div class="card">
+  <form method="post" action="/admin/settings/theme">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>App theme</label>
+    <select name="ui_theme" style="max-width:260px">
+      {% set labels = {'dark':'🌙 Dark','light':'☀ Light','midnight':'🌌 Midnight'} %}
+      {% for t in themes %}
+      <option value="{{ t }}" {{ 'selected' if t == ui_theme }}>{{ labels.get(t, t) }}</option>
+      {% endfor %}
+    </select>
+    <p class="small" style="margin:6px 0 0">Sets the look for the whole app — sign-in, portal and admin.
+    Dark is the default. Saving applies it immediately for everyone.</p>
+    <p style="margin-top:14px"><button class="btn green" type="submit">Save appearance</button></p>
+  </form>
+</div>
+
 <h2>Mail server status</h2>
 <div class="card">
   <table>

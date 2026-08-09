@@ -1,11 +1,9 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="{{ ui_theme|default('dark') }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}{{ brand }}{% endblock %} — {{ brand }}</title>
-<script>/* set saved theme before paint (default: dark) — avoids any flash */
-(function(){try{var t=localStorage.getItem('tvtheme');if(t){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();</script>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -13,11 +11,6 @@
   <div class="wrap navbar">
     <a class="brand" href="/">🔐 {{ brand }}</a>
     <span class="navlinks">
-      <select class="themesel" id="themeSel" aria-label="Theme" title="Theme">
-        <option value="dark">🌙 Dark</option>
-        <option value="light">☀ Light</option>
-        <option value="midnight">🌌 Midnight</option>
-      </select>
       {% if user %}
         {% if principal.is_operator %}
           <a href="/dashboard">Companies</a>
@@ -45,11 +38,5 @@
   {{ brand }} v{{ version }} · DPDPA 2023 &amp; DPDP Rules 2025 · Identifies gaps and records evidence;
   not legal advice. Remediation runs only with the client's consent, access and permission.
 </div></footer>
-<script>/* theme picker: reflect current, persist choice */
-(function(){var sel=document.getElementById('themeSel');if(!sel)return;
-sel.value=document.documentElement.getAttribute('data-theme')||'dark';
-sel.addEventListener('change',function(){var t=sel.value;
-document.documentElement.setAttribute('data-theme',t);
-try{localStorage.setItem('tvtheme',t);}catch(e){}});})();</script>
 </body>
 </html>

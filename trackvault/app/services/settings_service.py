@@ -28,6 +28,37 @@ def set_raw(db: Session, key: str, value: str) -> None:
     db.commit()
 
 
+# ---- Appearance / theme (app-wide, admin-controlled) ----
+VALID_THEMES = ("dark", "light", "midnight")
+DEFAULT_THEME = "dark"
+_theme_cache: dict = {"v": None}
+
+
+def get_ui_theme(db: Session | None = None) -> str:
+    """The app-wide theme the admin has chosen (default: dark). Cached in-process
+    and refreshed on save, so it's cheap to read on every page render."""
+    if db is not None:
+        val = get_raw(db, "ui_theme")
+        _theme_cache["v"] = val if val in VALID_THEMES else DEFAULT_THEME
+        return _theme_cache["v"]
+    if _theme_cache["v"] is None:
+        try:
+            from ..db import SessionLocal
+            with SessionLocal() as s:
+                val = get_raw(s, "ui_theme")
+            _theme_cache["v"] = val if val in VALID_THEMES else DEFAULT_THEME
+        except Exception:
+            return DEFAULT_THEME  # DB not ready — render dark, don't cache
+    return _theme_cache["v"]
+
+
+def set_ui_theme(db: Session, value: str) -> str:
+    theme = value if value in VALID_THEMES else DEFAULT_THEME
+    set_raw(db, "ui_theme", theme)
+    _theme_cache["v"] = theme
+    return theme
+
+
 def effective_email_config(db: Session) -> dict:
     s = get_settings()
     en = get_raw(db, "email_enabled")

@@ -202,9 +202,22 @@ def blank_template(request: Request, db: Session = Depends(get_db)):
 @router.get("/admin/settings")
 def settings_page(request: Request, db: Session = Depends(get_db)):
     p = require(request, db, roles={Role.admin})
-    from ..services.settings_service import effective_email_config, smtp_ready
+    from ..services.settings_service import effective_email_config, smtp_ready, get_ui_theme, VALID_THEMES
     cfg = effective_email_config(db)
-    return render(request, "admin_settings.html", cfg=cfg, smtp_ready=smtp_ready(cfg))
+    return render(request, "admin_settings.html", cfg=cfg, smtp_ready=smtp_ready(cfg),
+                  ui_theme=get_ui_theme(db), themes=VALID_THEMES)
+
+
+@router.post("/admin/settings/theme")
+async def save_theme(request: Request, db: Session = Depends(get_db)):
+    p = require(request, db, roles={Role.admin})
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    from ..services.settings_service import set_ui_theme
+    theme = set_ui_theme(db, (form.get("ui_theme", "") or "").strip())
+    record(db, action="settings.theme", actor=p.user, target_type="settings", target_id="theme",
+           ip=getattr(request.state, "client_ip", ""), theme=theme)
+    return redirect("/admin/settings", f"Appearance set to {theme.title()}.")
 
 
 @router.post("/admin/settings")
