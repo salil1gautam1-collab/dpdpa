@@ -98,14 +98,26 @@ def _catalogue(controls: list[dict], cats: dict) -> str:
 
 def _prompt(candidates: list[dict], cats: dict, passage: str) -> list[dict]:
     system = (
-        "You are a DPDPA (India Digital Personal Data Protection Act) compliance analyst. "
-        "You are shown a SHORT LIST of candidate compliance checkpoints and one passage from a "
-        "client's document. For each candidate that the passage clearly speaks to, output an object: "
-        "controlId (exactly one of the listed ids), status (COMPLIANT, PARTIAL, GAP, NA, or TBC), "
-        "evidence (a short paraphrase), sourceQuote (the exact phrase from the passage), and "
-        "confidence (high, medium, or low). Skip any candidate the passage does not clearly address — "
-        "do not guess. Map 'not compliant'/'no policy'/'missing' to GAP, partial arrangements to PARTIAL, "
-        "clearly-in-place controls to COMPLIANT, 'does not apply' to NA. "
+        "You are a DPDPA (India Digital Personal Data Protection Act) compliance analyst reading a "
+        "passage from a CLIENT'S OWN document. For each candidate checkpoint, decide what the passage "
+        "actually STATES about it:\n"
+        "- it is missing / not done / not compliant → GAP\n"
+        "- it is planned, being drafted, or only partly in place → PARTIAL\n"
+        "- it is explicitly affirmed as implemented → COMPLIANT (you MUST copy the affirming "
+        "sentence into sourceQuote)\n"
+        "- it does not apply to this organisation → NA\n"
+        "- the topic is mentioned but its implementation status is NOT stated → TBC\n"
+        "CRITICAL: never output COMPLIANT merely because the topic appears — a heading, a column "
+        "name, or a question about a topic is NOT compliance. When in doubt, use TBC.\n"
+        "evidence must paraphrase what the DOCUMENT says (never repeat the checkpoint title). "
+        "sourceQuote must be an exact sentence copied from the passage.\n"
+        "Example — passage says 'Privacy notice yet to be published on the website': "
+        '{"controlId":"NT-01","status":"GAP","evidence":"Notice not yet published on the site",'
+        '"sourceQuote":"Privacy notice yet to be published on the website","confidence":"high"}\n'
+        "Example — passage says 'Cookie banner: to be discussed with vendor': "
+        '{"controlId":"CK-01","status":"TBC","evidence":"Cookie banner still under discussion",'
+        '"sourceQuote":"Cookie banner: to be discussed with vendor","confidence":"medium"}\n'
+        "Skip candidates the passage does not genuinely address. "
         'Respond ONLY as JSON: {"mappings": [ ... ]}. If nothing matches, return {"mappings": []}.')
     user = (f"CANDIDATE CHECKPOINTS:\n{_catalogue(candidates, cats)}\n\n"
             f"PASSAGE:\n{passage}\n\n"

@@ -35,6 +35,46 @@ from ..models import AiSuggestion, ImportJob
 STRUCTURED_THRESHOLD = 3
 
 
+def _norm(s: str) -> str:
+    return "".join(ch for ch in (s or "").lower() if ch.isalnum())
+
+
+_ABSENCE_MARKERS = ("no mention", "no information available", "not mentioned",
+                    "nothing in the document", "document does not")
+
+
+def _guard_compliant(cand: dict, title: str) -> dict:
+    """Trust guards. A compliance product must never overstate in EITHER direction:
+    - COMPLIANT is allowed only with proof of an affirmation (a real source quote,
+      and evidence that isn't the checkpoint title echoed back).
+    - Absence of information is TBC — not NA ("doesn't apply") and not GAP
+      ("confirmed missing"). The model saying "no mention of X" is a non-answer.
+    Anything weaker is demoted to TBC for a human to confirm."""
+    status = cand.get("status")
+    ev_raw = (cand.get("evidence") or "").strip().lower()
+
+    if status in ("NA", "GAP") and any(m in ev_raw for m in _ABSENCE_MARKERS):
+        cand = dict(cand)
+        cand["status"] = "TBC"
+        cand["confidence"] = "low"
+        cand["evidence"] = "The document doesn't address this — please confirm."
+        return cand
+
+    if status != "COMPLIANT":
+        return cand
+    quote = (cand.get("sourceQuote") or "").strip()
+    ev, ttl = _norm(cand.get("evidence", "")), _norm(title)
+    echoes = bool(ev) and bool(ttl) and (ev == ttl or ev in ttl or ttl in ev)
+    thin_quote = len(_norm(quote)) < 15 or _norm(quote) == ttl
+    if echoes or thin_quote:
+        cand = dict(cand)
+        cand["status"] = "TBC"
+        cand["confidence"] = "low"
+        cand["evidence"] = ("Topic appears in the document but implementation is not "
+                            "explicitly affirmed — please confirm.")
+    return cand
+
+
 # ---------------- text extraction (any supported format) ----------------
 
 def extract_text(filename: str, data: bytes) -> str:
@@ -187,6 +227,7 @@ def _run_job(job_id: str, filename: str, data: bytes) -> None:
                             "evidence": str(m.get("evidence", ""))[:400],
                             "sourceQuote": str(m.get("sourceQuote", "") or m.get("quote", ""))[:300],
                             "confidence": str(m.get("confidence", "")).lower()[:10] or "medium"}
+                    cand = _guard_compliant(cand, by_id[cid].get("title", ""))
                     prev = best.get(cid)
                     rank = {"high": 3, "medium": 2, "low": 1}
                     if not prev or rank.get(cand["confidence"], 0) > rank.get(prev["confidence"], 0):
