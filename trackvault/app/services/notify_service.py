@@ -14,34 +14,45 @@ from ..models import Notification
 _s = get_settings()
 
 
-def smtp_configured() -> bool:
-    return bool(_s.smtp_host and _s.smtp_pass)
+def _env_cfg() -> dict:
+    return {"enabled": True, "from_addr": _s.smtp_from, "test_recipient": _s.test_recipient.strip(),
+            "host": _s.smtp_host, "port": _s.smtp_port, "user": _s.smtp_user, "password": _s.smtp_pass}
 
 
-def _send_email(to: str, subject: str, body: str, attachment: tuple | None = None) -> tuple[str, str]:
-    """attachment = (filename, bytes, mime_subtype) e.g. ('report.html', b'...', 'html')."""
+def smtp_configured(cfg: dict | None = None) -> bool:
+    cfg = cfg or _env_cfg()
+    return bool(cfg.get("host") and cfg.get("password"))
+
+
+def _send_email(to: str, subject: str, body: str, attachment: tuple | None = None,
+                cfg: dict | None = None) -> tuple[str, str]:
+    """attachment = (filename, bytes, mime_subtype). cfg from settings_service or env."""
+    cfg = cfg or _env_cfg()
+    if not cfg.get("enabled", True):
+        return "disabled", ""
     if not to:
         return "no-recipient", ""
     actual = to
-    if _s.test_recipient.strip():
+    guard = (cfg.get("test_recipient") or "").strip()
+    if guard:
         body = (f"*** TEST MODE — redirected. Intended recipient: {to} ***\n\n") + body
         subject = f"[TEST->{to}] {subject}"
-        actual = _s.test_recipient.strip()
-    if not smtp_configured():
+        actual = guard
+    if not smtp_configured(cfg):
         return "simulated", actual
     try:
         msg = EmailMessage()
-        msg["From"] = _s.smtp_from or _s.smtp_user
+        msg["From"] = cfg.get("from_addr") or cfg.get("user")
         msg["To"] = actual
         msg["Subject"] = subject
         msg.set_content(body)
         if attachment:
             fname, data, subtype = attachment
             msg.add_attachment(data, maintype="text", subtype=subtype, filename=fname)
-        with smtplib.SMTP(_s.smtp_host, _s.smtp_port, timeout=30) as srv:
+        with smtplib.SMTP(cfg["host"], int(cfg["port"]), timeout=30) as srv:
             srv.starttls(context=ssl.create_default_context())
-            if _s.smtp_user:
-                srv.login(_s.smtp_user, _s.smtp_pass)
+            if cfg.get("user"):
+                srv.login(cfg["user"], cfg["password"])
             srv.send_message(msg)
         return "sent", actual
     except Exception as ex:  # pragma: no cover
@@ -65,8 +76,10 @@ def send_report_email(db: Session, company, snapshot, to_email: str, note: str =
         body += f"\n{note}\n"
     body += f"\nOpen the attached file in a browser and use Print → Save as PDF for a PDF copy.\n"
     fname = f"DPDPA-Report-{company.slug}-{date_fmt}.html"
+    from .settings_service import effective_email_config
     status, actual = _send_email(to_email, f"DPDPA Compliance Report — {company.name} ({date_fmt})",
-                                 body, attachment=(fname, html.encode("utf-8"), "html"))
+                                 body, attachment=(fname, html.encode("utf-8"), "html"),
+                                 cfg=effective_email_config(db))
     n = Notification(company_id=company.id, ntype="REPORT SENT",
                      title=f"Report emailed to {to_email} ({date_fmt})", body=body,
                      email_to=to_email, email_status=status, email_delivered_to=actual)
@@ -78,7 +91,9 @@ def send_report_email(db: Session, company, snapshot, to_email: str, note: str =
 
 def notify(db: Session, company_id: str, ntype: str, title: str, body: str,
            email_to: str = "") -> Notification:
-    status, actual = _send_email(email_to, f"[{ntype}] {title}", body) if email_to else ("not-sent", "")
+    from .settings_service import effective_email_config
+    cfg = effective_email_config(db)
+    status, actual = _send_email(email_to, f"[{ntype}] {title}", body, cfg=cfg) if email_to else ("not-sent", "")
     n = Notification(company_id=company_id, ntype=ntype, title=title, body=body,
                      email_to=email_to, email_status=status, email_delivered_to=actual)
     db.add(n)

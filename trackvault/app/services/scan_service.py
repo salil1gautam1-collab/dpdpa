@@ -45,8 +45,10 @@ def run_and_notify(db: Session, company: Company, *, skip_web: bool = False,
     snap = run_assessment(db, company, skip_web=skip_web, actor_email=actor_email)
     alerts = compute_alerts(prev_data, snap.data)
 
-    client = db.execute(select(User).where(User.company_id == company.id,
-                                           User.role == Role.client)).scalar_one_or_none()
+    # Deterministic: the single active client for THIS company only — never another's.
+    client = db.execute(select(User).where(User.company_id == company.id, User.role == Role.client,
+                                           User.is_active.is_(True))
+                        .order_by(User.created_at.desc())).scalars().first()
     s = summarize(snap.data)
     d = snap.scan_id
     date_fmt = f"{d[:4]}-{d[4:6]}-{d[6:8]}"

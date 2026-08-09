@@ -193,6 +193,14 @@ class AiSuggestion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class AppSetting(Base):
+    """Runtime-editable settings (operational toggles). Secrets stay in env."""
+    __tablename__ = "app_settings"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
 class AuditLog(Base):
     """Append-only audit trail. Never updated or deleted."""
     __tablename__ = "audit_log"

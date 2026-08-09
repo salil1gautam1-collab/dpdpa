@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Delivery log{% endblock %}
+{% block body %}
+<h1>Email delivery log</h1>
+<p class="small">Mode: <b>{{ mode }}</b>. Every notification and report email is recorded here with its status.
+Manage email in <a href="/admin/settings">Settings</a>.</p>
+<div class="overflow">
+<table>
+  <tr><th>When (UTC)</th><th>Company</th><th>Intended recipient</th><th>Type / title</th><th>Status</th></tr>
+  {% for n in rows %}
+  <tr>
+    <td class="tag">{{ n.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td class="small">{{ names.get(n.company_id, '—') }}</td>
+    <td class="small">{{ n.email_to }}
+      {% if n.email_delivered_to and n.email_delivered_to != n.email_to %}<br><span class="small" style="color:var(--warn)">→ {{ n.email_delivered_to }}</span>{% endif %}</td>
+    <td class="small"><b>{{ n.ntype }}</b> — {{ n.title }}</td>
+    <td class="small">{{ n.email_status }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="small">No emails sent yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

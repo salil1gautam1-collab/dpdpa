@@ -289,14 +289,21 @@ def set_client_login(cid: str, request: Request, email: str = Form(...), csrf: s
     check_csrf(p, csrf)
     email = email.strip().lower()
     existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if existing and not (existing.company_id == cid and existing.role == Role.client):
+        return redirect(f"/companies/{cid}", "That email already belongs to another account.", err=True)
     import secrets as _sec
     temp = "Tv-" + _sec.token_urlsafe(9)
-    if existing and existing.company_id == cid and existing.role == Role.client:
+    # Enforce exactly one active client per company — retire any prior client logins
+    # so automated emails can never go to a stale/wrong address.
+    for old in db.execute(select(User).where(User.company_id == cid, User.role == Role.client,
+                                             User.email != email)).scalars():
+        old.is_active = False
+        old.company_id = None
+    if existing:
         existing.password_hash = hash_password(temp)
         existing.must_change_password = True
         existing.is_active = True
-    elif existing:
-        return redirect(f"/companies/{cid}", "That email already belongs to another account.", err=True)
+        existing.company_id = cid
     else:
         u = User(organization_id=p.user.organization_id, email=email, name="Client",
                  role=Role.client, password_hash=hash_password(temp),

@@ -198,9 +198,51 @@ def blank_template(request: Request, db: Session = Depends(get_db)):
                     headers={"Content-Disposition": 'attachment; filename="DPDPA-Questionnaire-Template.xlsx"'})
 
 
+# ---- Settings (admin) ----
+@router.get("/admin/settings")
+def settings_page(request: Request, db: Session = Depends(get_db)):
+    p = require(request, db, roles={Role.admin})
+    from ..services.settings_service import effective_email_config, smtp_ready
+    cfg = effective_email_config(db)
+    return render(request, "admin_settings.html", cfg=cfg, smtp_ready=smtp_ready(cfg))
+
+
+@router.post("/admin/settings")
+async def save_settings(request: Request, db: Session = Depends(get_db)):
+    p = require(request, db, roles={Role.admin})
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    from ..services.settings_service import set_raw
+    set_raw(db, "email_enabled", "true" if form.get("email_enabled") else "false")
+    set_raw(db, "email_from", (form.get("email_from", "") or "").strip())
+    set_raw(db, "test_recipient", (form.get("test_recipient", "") or "").strip())
+    record(db, action="settings.update", actor=p.user, target_type="settings", target_id="email",
+           ip=getattr(request.state, "client_ip", ""),
+           email_enabled=bool(form.get("email_enabled")),
+           test_recipient=bool((form.get("test_recipient", "") or "").strip()))
+    return redirect("/admin/settings", "Settings saved — effective immediately.")
+
+
 # ---- Audit (admin) ----
 @router.get("/admin/audit")
 def audit_page(request: Request, db: Session = Depends(get_db)):
     p = require(request, db, roles={Role.admin})
     entries = list(db.execute(select(AuditLog).order_by(AuditLog.id.desc()).limit(200)).scalars())
     return render(request, "admin_audit.html", entries=entries)
+
+
+# ---- Email delivery log (admin) ----
+@router.get("/admin/outbox")
+def outbox_page(request: Request, db: Session = Depends(get_db)):
+    p = require(request, db, roles={Role.admin})
+    from ..models import Notification, Company
+    from ..services.settings_service import effective_email_config, smtp_ready
+    rows = list(db.execute(select(Notification).where(Notification.email_to != "")
+                           .order_by(Notification.created_at.desc()).limit(150)).scalars())
+    names = {c.id: c.name for c in db.execute(select(Company)).scalars()}
+    cfg = effective_email_config(db)
+    mode = ("LIVE" if (smtp_ready(cfg) and cfg["enabled"]) else
+            ("OFF" if not cfg["enabled"] else "SIMULATED"))
+    if cfg["test_recipient"]:
+        mode += f" · redirected to {cfg['test_recipient']}"
+    return render(request, "admin_outbox.html", rows=rows, names=names, mode=mode)

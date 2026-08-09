@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block body %}
+<h1>Settings</h1>
+<p class="small">Operational settings, effective immediately (no restart). Secrets like the SMTP password stay
+in the server environment and aren't editable here.</p>
+
+<h2>Email</h2>
+<div class="card">
+  <form method="post" action="/admin/settings">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+
+    <label style="margin-top:4px">
+      <input type="checkbox" name="email_enabled" value="1" style="width:auto" {{ 'checked' if cfg.enabled }}>
+      <b>Send emails</b> — master switch. Unticked, nothing is emailed (portal notifications still work).
+    </label>
+
+    <label>Sender address (From)</label>
+    <input type="email" name="email_from" value="{{ cfg.from_addr }}" placeholder="info@yourfirm.com">
+    <p class="small" style="margin:4px 0 0">Must be your authenticated mailbox or an approved alias, or the mail
+    server will reject it.</p>
+
+    <label style="margin-top:14px">Redirect all email to (test / safe mode)</label>
+    <input type="email" name="test_recipient" value="{{ cfg.test_recipient }}" placeholder="leave blank to send to real customers">
+    <p class="small" style="margin:4px 0 0">
+      {% if cfg.test_recipient %}<b style="color:var(--warn)">⚠ Test mode is ON</b> — every email goes only to
+      <b>{{ cfg.test_recipient }}</b>, never to real customers.{% else %}
+      <b style="color:var(--ok)">Live</b> — emails go to each customer's own login address.{% endif %}
+      Set an address to redirect everything there while testing; clear it to send to real customers.</p>
+
+    <p style="margin-top:16px"><button class="btn green" type="submit">Save settings</button></p>
+  </form>
+</div>
+
+<h2>Mail server status</h2>
+<div class="card">
+  <table>
+    <tr><th style="width:220px">SMTP host</th><td>{{ cfg.host or '(not set)' }}</td></tr>
+    <tr><th>SMTP user</th><td>{{ cfg.user or '(not set)' }}</td></tr>
+    <tr><th>Delivery</th><td>
+      {% if smtp_ready and cfg.enabled %}<span class="badge b-COMPLIANT">LIVE — sending</span>
+      {% elif not cfg.enabled %}<span class="badge b-NA">OFF — email disabled</span>
+      {% else %}<span class="badge b-TBC">SIMULATED — set SMTP password in the server environment to send</span>{% endif %}</td></tr>
+  </table>
+  <p class="small" style="margin-top:10px">SMTP host, user and password are set in the server environment
+  (<code>TRACKVAULT_SMTP_*</code>) — they're secrets and change with a redeploy, not from this page.
+  Full delivery history: <a href="/admin/outbox">Notification delivery log</a>.</p>
+</div>
+{% endblock %}
