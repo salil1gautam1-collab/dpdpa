@@ -27,7 +27,7 @@
 <div class="grid c3">
   <div class="card"><h3>1. Questionnaire</h3><p class="small">Declare internal controls we can't verify automatically. <b>{{ answered }}/{{ total }}</b> answered.</p>
     <a class="btn sm" href="/workspace/questionnaire">Fill questionnaire</a>
-    {% if latest and latest.counts.TBC %}<a class="btn sm" style="background:#5c6bc0" href="/workspace/questionnaire?only=unconfirmed">🎯 Just the {{ latest.counts.TBC }} left after the scan</a>{% endif %}</div>
+    {% if latest and latest.counts.TBC %}<a class="btn sm indigo" href="/workspace/questionnaire?only=unconfirmed">🎯 Just the {{ latest.counts.TBC }} left after the scan</a>{% endif %}</div>
   <div class="card"><h3>2. Infrastructure &amp; cloud access</h3><p class="small">Optionally provide read-only access so we can verify posture directly. Consent per system.</p>
     <a class="btn sm" href="/companies/{{ c.id }}/connectors">Provide access &amp; consent</a></div>
   <div class="card"><h3>3. Submit</h3><p class="small">When your inputs are in, submit them — your assessment team prepares your report.</p>

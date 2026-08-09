@@ -9,7 +9,7 @@
   {% for row in rows %}
   <tr>
     <td><a href="/companies/{{ row.c.id }}"><b>{{ row.c.name }}</b></a>
-      {% if row.c.pending_assessment %}<br><span class="pill" style="background:#fdecea;color:#c62826">🔔 client submitted — ready to assess</span>{% endif %}
+      {% if row.c.pending_assessment %}<br><span class="pill alert">🔔 client submitted — ready to assess</span>{% endif %}
     </td>
     <td class="small">{{ row.c.sites|join(', ') if row.c.sites else '(questionnaire only)' }}</td>
     <td style="text-align:center">{{ '✅' if row.c.scan_consent and row.c.scan_consent.granted else '—' }}</td>
