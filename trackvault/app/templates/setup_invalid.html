@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Link not valid{% endblock %}
+{% block body %}
+<div class="authwrap">
+  <div class="auth-hero"><div class="lock">🔒</div>
+    <h1 style="margin:6px 0 2px">This setup link isn't valid</h1>
+    <p class="small">It may have expired or been revoked. Please ask your {{ brand }} contact to send a
+      fresh link.</p>
+  </div>
+</div>
+{% endblock %}
