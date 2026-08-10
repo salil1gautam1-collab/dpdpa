@@ -1,0 +1,27 @@
+# gitleaks configuration for the dpdpa repository.
+#
+# Keep ALL of gitleaks' default secret-detection rules on — real credentials
+# committed anywhere still fail the build. This file only allowlists a handful
+# of strings that are intentionally public NON-secrets, so the scanner stops
+# raising false positives on them.
+title = "TrackVault gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-safe non-secrets: test fixtures and documented dev/CI placeholders"
+regexes = [
+  # Dummy key set at the top of the pure-unit tests (obviously not a real key).
+  '''test-secret-key-at-least-32-chars-long''',
+  # Dummy key hard-coded in the CI workflow to satisfy the config gate.
+  '''ci-secret-key-at-least-32-characters-long''',
+  # Documented development defaults in config.py / docker-compose — the app's
+  # production config gate REFUSES to boot if these survive into production.
+  '''dev-insecure-change-me[a-z0-9-]*''',
+  '''ChangeMe!Admin2026''',
+]
+paths = [
+  # The environment template ships placeholder values, never real ones.
+  '''trackvault/\.env\.example''',
+]

@@ -50,6 +50,9 @@ jobs:
           pip install pip-audit
           pip-audit -r requirements.txt || true   # report, don't block initial pipeline
       - name: Secret scan (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+        # Run the gitleaks CLI directly rather than the marketplace action — the
+        # action's PR-comment integration needs a license/token/write-permission
+        # dance that adds no value here. This just scans and fails on a real leak.
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/repo" ghcr.io/gitleaks/gitleaks:latest \
+            detect --source /repo --config /repo/.gitleaks.toml --redact --no-banner
