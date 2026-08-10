@@ -153,7 +153,7 @@ def connectors_page(cid: str, request: Request, db: Session = Depends(get_db)):
                       "tenantId": (conn.public_config or {}).get("tenantId", "")}
     return render(request, "connectors.html", c=c, specs=SPECS, view=view,
                   field_labels=FIELD_LABELS, field_placeholders=FIELD_PLACEHOLDERS,
-                  provider_help=PROVIDER_HELP,
+                  provider_help=PROVIDER_HELP, is_operator=p.is_operator,
                   back=("/companies/" + cid) if p.is_operator else "/workspace")
 
 
@@ -217,6 +217,8 @@ async def save_connector(cid: str, provider: str, request: Request, db: Session 
 @router.post("/companies/{cid}/access-request")
 async def send_access_request(cid: str, request: Request, db: Session = Depends(get_db)):
     p, c = _access(request, db, cid)
+    if not p.is_operator:
+        raise HTTPException(403, "Only operators can send access requests.")
     form = await request.form()
     check_csrf(p, form.get("csrf", ""))
     providers = [k for k in SPECS if form.get("ar_" + k)]

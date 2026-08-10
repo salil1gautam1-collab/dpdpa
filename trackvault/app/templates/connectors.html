@@ -7,6 +7,7 @@
 <p class="small">All connectors are read-only and run only after authorisation. Credentials are
 <b>encrypted at rest</b> and never shown back or logged.</p>
 
+{% if is_operator %}
 <div class="card" style="border-color:var(--acc)">
   <h3 style="margin-top:0">✉ Send an access request to the customer's IT team</h3>
   <p class="small">Let their IT admin set the connectors up themselves: pick what you need, we email a
@@ -24,6 +25,7 @@
     <p style="margin-top:12px"><button class="btn" type="submit">✉ Send access request</button></p>
   </form>
 </div>
+{% endif %}
 
 {% for prov, spec in specs.items() %}
 {% set v = view.get(prov) %}
