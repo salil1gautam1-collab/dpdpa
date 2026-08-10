@@ -64,4 +64,24 @@ async def setup_save(token: str, provider: str, request: Request, db: Session = 
     from ..audit import record
     record(db, action="connector.setup", actor=None, target_type="company", target_id=c.id,
            ip=getattr(request.state, "client_ip", ""), provider=provider, verified=tested_ok)
+    # Close the loop: tell whoever sent the request that the IT admin is done, so
+    # nobody has to keep checking the Connectors page. Lands in the bell/page and,
+    # if the sender's email is known, as an email too. Never blocks the customer.
+    try:
+        from ..services.notify_service import notify
+        label = SPECS.get(provider, ("", "", "", provider))[3]
+        if tested_ok:
+            title = f"{c.name}: {label} connected — read-only access verified"
+            body = (f"{c.name}'s IT admin just completed setup for {label} via the secure link.\n\n"
+                    f"{test_msg}\n\nNothing else to do — the connector is live and read-only.")
+        else:
+            title = f"{c.name}: {label} setup attempted — needs a look"
+            body = (f"{c.name}'s IT admin submitted {label} via the secure link, but the "
+                    f"read-only check did not pass:\n\n{test_msg}\n\n"
+                    f"They may retry on the same link, or reach out to help them.")
+        notify(db, company_id=c.id, ntype="CONNECTOR SETUP",
+               title=title, body=body, email_to=(ar.created_by or ""))
+    except Exception:  # a notification failure must never break the customer's flow
+        import logging
+        logging.getLogger("trackvault").exception("connector-setup notify failed")
     return redirect(f"/setup/{token}", test_msg, err=not tested_ok)
