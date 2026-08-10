@@ -26,6 +26,51 @@ SPECS = {
     "firewall": ("configText", ["configText"], [], "Firewall configuration"),
 }
 
+# Human-friendly labels so the form never shows raw field names like "clientId".
+FIELD_LABELS = {
+    "accessKeyId": "Access key ID",
+    "secretAccessKey": "Secret access key",
+    "region": "Default region",
+    "clientId": "Application (client) ID",
+    "clientSecret": "Client secret",
+    "tenantId": "Directory (tenant) ID",
+    "projectId": "Project ID",
+    "accessToken": "OAuth access token",
+}
+
+FIELD_PLACEHOLDERS = {
+    "accessKeyId": "AKIA…",
+    "secretAccessKey": "the secret half of the key pair",
+    "region": "ap-south-1 (Mumbai)",
+    "clientId": "00000000-0000-0000-0000-000000000000",
+    "clientSecret": "the secret Value from ‘Certificates & secrets’",
+    "tenantId": "00000000-0000-0000-0000-000000000000",
+    "projectId": "my-gcp-project-id",
+    "accessToken": "ya29.…  (from: gcloud auth print-access-token)",
+}
+
+# One plain-English line per connector: what the credential IS and how to get it.
+# The recurring theme — read-only, and never a personal sign-in.
+PROVIDER_HELP = {
+    "aws": ("A <b>read-only</b> IAM access key — not your console login. In AWS: IAM → Users → "
+            "add a user → attach the AWS-managed <b>SecurityAudit</b> (read-only) policy → create "
+            "an access key. Paste its Access key ID + Secret access key below."),
+    "azure": ("A <b>read-only Entra ID app registration</b> (a “service principal”) — <b>not</b> your "
+              "Azure sign-in. Ask your admin to register an app, add a client secret, and grant it "
+              "<b>Reader</b> + <b>Security Reader</b> on the subscription. Then paste the three values "
+              "below."),
+    "intune": ("The <b>same</b> Entra ID app registration as Azure can be used — it just also needs the "
+               "Microsoft Graph application permission <b>DeviceManagementManagedDevices.Read.All</b> "
+               "with admin consent. Paste the three values below. (Not your Microsoft sign-in.)"),
+    "gcp": ("A short-lived <b>read-only</b> OAuth access token for the project — e.g. run "
+            "<code>gcloud auth print-access-token</code> as an account with <b>Viewer</b> / "
+            "<b>Security Reviewer</b>. Paste the Project ID and the token."),
+    "adgpo": ("<b>No credentials.</b> Run your read-only AD/GPO collector and paste its JSON output "
+              "here — nothing connects to your directory."),
+    "firewall": ("<b>No credentials.</b> Export your firewall’s configuration/ruleset and paste the "
+                 "text here."),
+}
+
 
 def _access(request: Request, db: Session, cid: str) -> tuple:
     p = require(request, db)
@@ -54,6 +99,8 @@ def connectors_page(cid: str, request: Request, db: Session = Depends(get_db)):
                       "region": (conn.public_config or {}).get("region", ""),
                       "tenantId": (conn.public_config or {}).get("tenantId", "")}
     return render(request, "connectors.html", c=c, specs=SPECS, view=view,
+                  field_labels=FIELD_LABELS, field_placeholders=FIELD_PLACEHOLDERS,
+                  provider_help=PROVIDER_HELP,
                   back=("/companies/" + cid) if p.is_operator else "/workspace")
 
 
