@@ -25,18 +25,29 @@
     <p style="margin-top:12px"><button class="btn" type="submit">✉ Send access request</button></p>
   </form>
 </div>
+{% else %}
+<div class="card">
+  <p class="small" style="margin:0">Your IT team normally sets these up through the <b>secure link</b> your
+    engagement team emails them — that's the easiest path and it verifies read-only access on the spot.
+    If you already have the read-only values to hand, you can also enter any connector yourself below.
+    Each one is optional.</p>
+</div>
 {% endif %}
 
 {% for prov, spec in specs.items() %}
 {% set v = view.get(prov) %}
 <div class="card">
-  <h3 style="margin-top:0">{{ spec[3] }} {% if v and v.connected %}<span class="badge b-COMPLIANT">Connected</span>{% endif %}</h3>
+  <h3 style="margin-top:0">{{ spec[3] }} {% if v and v.connected %}<span class="badge b-COMPLIANT">Connected</span>{% else %}<span class="small" style="color:var(--muted)">Not connected</span>{% endif %}</h3>
+  {% if not is_operator %}<details class="setupfold"{% if v and v.connected %} open{% endif %}>
+    <summary style="cursor:pointer;font-weight:600;color:var(--acc);margin-bottom:8px">
+      {{ 'Update the values' if v and v.connected else 'Enter the read-only values yourself' }}</summary>{% endif %}
   <form method="post" action="/companies/{{ c.id }}/connectors/{{ prov }}">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     {{ fields(prov, spec, field_labels, field_placeholders, provider_help, v) }}
     <label style="margin-top:12px"><input type="checkbox" name="consent" value="1" style="width:auto"> I authorise read-only posture checks using these credentials.</label>
     <p style="margin-top:12px"><button class="btn green sm" type="submit">{{ 'Update' if v and v.connected else 'Connect &amp; save' }}</button></p>
   </form>
+  {% if not is_operator %}</details>{% endif %}
   {% if v and v.connected %}
   <div class="rowbtns" style="margin-top:8px">
     <form method="post" action="/companies/{{ c.id }}/connectors/{{ prov }}/test" class="inline">
