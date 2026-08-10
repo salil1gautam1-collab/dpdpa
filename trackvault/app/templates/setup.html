@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_connfields.html" import fields %}
+{% block title %}Set up read-only access{% endblock %}
+{% block body %}
+<div style="max-width:820px;margin:0 auto">
+  <h1>Read-only access setup — {{ c.name }}</h1>
+  <div class="banner op">🔒 <b>Read-only.</b> Everything here grants permission to <b>read</b> your
+    posture — never to change anything — and you can revoke it at any time. Values are entered on this
+    encrypted page and are <b>never emailed</b>.</div>
+
+  {% for prov in providers %}
+  {% set spec = specs[prov] %}{% set v = view.get(prov) %}
+  <div class="card">
+    <h3 style="margin-top:0">{{ spec[3] }} {% if v and v.connected %}<span class="badge b-COMPLIANT">Connected</span>{% endif %}</h3>
+    <form method="post" action="/setup/{{ token }}/{{ prov }}">
+      {{ fields(prov, spec, field_labels, field_placeholders, provider_help, v) }}
+      <label style="margin-top:12px"><input type="checkbox" name="consent" value="1" style="width:auto"> I authorise read-only posture checks using these details.</label>
+      <p style="margin-top:12px"><button class="btn green sm" type="submit">Save &amp; verify access</button></p>
+    </form>
+  </div>
+  {% endfor %}
+
+  <p class="small">When you save, we run an <b>immediate read-only check</b> and show the result at the
+    top of this page. Nothing else on your systems is touched.</p>
+</div>
+{% endblock %}

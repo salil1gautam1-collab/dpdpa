@@ -233,6 +233,21 @@ class AssessJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class AccessRequest(Base):
+    """A tokenised invite for a customer's IT admin to set up read-only connectors
+    themselves — the values never travel by email; they're entered over HTTPS via
+    a private link and stored encrypted, then a live read-only check confirms it."""
+    __tablename__ = "access_requests"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    company_id: Mapped[str] = mapped_column(ForeignKey("companies.id"), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    providers: Mapped[list] = mapped_column(JSONB, default=list)  # requested connector keys
+    created_by: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), default="open")  # open|completed|revoked
+
+
 class RegWatchItem(Base):
     """A document spotted on an official source (MeitY / eGazette / DPB) that may
     affect the rulebook. Detection is automated; judgment stays human: CS/Legal

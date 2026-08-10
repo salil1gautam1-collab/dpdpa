@@ -1,0 +1,44 @@
+{# Shared connector field rendering — used by the operator page (connectors.html)
+   and the customer self-service setup page (setup.html) so they never drift. #}
+{% macro yesno(name) %}<select name="{{ name }}" style="max-width:170px"><option value="">— to confirm —</option><option value="yes">Yes</option><option value="no">No</option></select>{% endmacro %}
+
+{% macro fields(prov, spec, labels, placeholders, help, v) %}
+{% set idf = spec[0] %}{% set secret_fields = spec[1] %}{% set plain = spec[2] %}
+{% if help.get(prov) %}<p class="small">{{ help[prov]|safe }}</p>{% endif %}
+{% if prov == 'adgpo' %}
+  <h4 style="margin:8px 0 2px">Password policy</h4>
+  <div class="grid c3">
+    <div><label>Minimum password length</label><input type="number" name="pw_minLength" min="0" placeholder="12"></div>
+    <div><label>Account lockout threshold</label><input type="number" name="pw_lockout" min="0" placeholder="5"></div>
+    <div><label>Max password age (days)</label><input type="number" name="pw_maxAge" min="0" placeholder="90"></div>
+    <div><label>Complexity required?</label>{{ yesno('pw_complexity') }}</div>
+  </div>
+  <h4 style="margin:14px 0 2px">Accounts</h4>
+  <div class="grid c3">
+    <div><label>Total user accounts</label><input type="number" name="totalUsers" min="0" placeholder="250"></div>
+    <div><label>Stale / inactive accounts</label><input type="number" name="staleAccounts" min="0" placeholder="4"></div>
+    <div><label>Domain Admins (count)</label><input type="number" name="priv_da" min="0" placeholder="3"></div>
+    <div><label>Enterprise Admins (count)</label><input type="number" name="priv_ea" min="0" placeholder="1"></div>
+  </div>
+  <h4 style="margin:14px 0 2px">Group Policy</h4>
+  <div class="grid c3">
+    <div><label>Screen lock enforced?</label>{{ yesno('gpo_screen') }}</div>
+    <div><label>Audit policy configured?</label>{{ yesno('gpo_audit') }}</div>
+    <div><label>USB storage blocked?</label>{{ yesno('gpo_usb') }}</div>
+  </div>
+{% elif prov == 'firewall' %}
+  <label>Firewall configuration / ruleset <span class="small">(paste the exported text)</span></label>
+  <textarea name="configText" rows="4" placeholder="paste firewall config export"></textarea>
+{% else %}
+  <label>{{ labels.get(idf, idf) }}{% if v and v.connected %} <span class="small">(current: {{ v.id_hint }})</span>{% endif %}</label>
+  <input type="text" name="{{ idf }}" autocomplete="off" placeholder="{{ placeholders.get(idf, '') }}">
+  {% for sf in secret_fields %}
+    <label>{{ labels.get(sf, sf) }} <span class="small">(encrypted; leave blank to keep existing)</span></label>
+    <input type="password" name="{{ sf }}" autocomplete="off" placeholder="{{ placeholders.get(sf, '') }}">
+  {% endfor %}
+  {% for pf in plain %}
+    <label>{{ labels.get(pf, pf) }}</label>
+    <input type="text" name="{{ pf }}" placeholder="{{ placeholders.get(pf, '') }}" value="{{ (v.region if pf=='region' else v.tenantId) if v else '' }}">
+  {% endfor %}
+{% endif %}
+{% endmacro %}

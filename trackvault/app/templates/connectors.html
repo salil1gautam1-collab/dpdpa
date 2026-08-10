@@ -1,64 +1,51 @@
 {% extends "base.html" %}
+{% from "_connfields.html" import fields %}
 {% block title %}Connectors{% endblock %}
-{% macro yesno(name) %}<select name="{{ name }}" style="max-width:170px"><option value="">— to confirm —</option><option value="yes">Yes</option><option value="no">No</option></select>{% endmacro %}
 {% block body %}
 <p class="small"><a href="{{ back }}">← back</a></p>
 <h1>Connectors — infrastructure &amp; cloud</h1>
 <p class="small">All connectors are read-only and run only after authorisation. Credentials are
 <b>encrypted at rest</b> and never shown back or logged.</p>
 
+<div class="card" style="border-color:var(--acc)">
+  <h3 style="margin-top:0">✉ Send an access request to the customer's IT team</h3>
+  <p class="small">Let their IT admin set the connectors up themselves: pick what you need, we email a
+    branded instruction pack and a <b>private, secure link</b>. They enter the read-only values on that
+    link (never by email), and it confirms <b>“✓ read-only access verified”</b> on the spot.</p>
+  <form method="post" action="/companies/{{ c.id }}/access-request">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="rowbtns" style="margin:4px 0 10px">
+      {% for prov, spec in specs.items() %}
+      <label style="font-weight:400"><input type="checkbox" name="ar_{{ prov }}" value="1" style="width:auto"> {{ spec[3] }}</label>
+      {% endfor %}
+    </div>
+    <label>Customer IT contact email</label>
+    <input type="email" name="to_email" placeholder="it-admin@customer.com" style="max-width:360px" required>
+    <p style="margin-top:12px"><button class="btn" type="submit">✉ Send access request</button></p>
+  </form>
+</div>
+
 {% for prov, spec in specs.items() %}
-{% set idf = spec[0] %}{% set secret_fields = spec[1] %}{% set plain = spec[2] %}{% set label = spec[3] %}
 {% set v = view.get(prov) %}
 <div class="card">
-  <h3 style="margin-top:0">{{ label }} {% if v and v.connected %}<span class="badge b-COMPLIANT">Connected</span>{% endif %}</h3>
-  {% if provider_help.get(prov) %}<p class="small">{{ provider_help[prov]|safe }}</p>{% endif %}
+  <h3 style="margin-top:0">{{ spec[3] }} {% if v and v.connected %}<span class="badge b-COMPLIANT">Connected</span>{% endif %}</h3>
   <form method="post" action="/companies/{{ c.id }}/connectors/{{ prov }}">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    {% if prov in ['adgpo'] %}
-      <h4 style="margin:8px 0 2px">Password policy</h4>
-      <div class="grid c3">
-        <div><label>Minimum password length</label><input type="number" name="pw_minLength" min="0" placeholder="12"></div>
-        <div><label>Account lockout threshold</label><input type="number" name="pw_lockout" min="0" placeholder="5"></div>
-        <div><label>Max password age (days)</label><input type="number" name="pw_maxAge" min="0" placeholder="90"></div>
-        <div><label>Complexity required?</label>{{ yesno('pw_complexity') }}</div>
-      </div>
-      <h4 style="margin:14px 0 2px">Accounts</h4>
-      <div class="grid c3">
-        <div><label>Total user accounts</label><input type="number" name="totalUsers" min="0" placeholder="250"></div>
-        <div><label>Stale / inactive accounts</label><input type="number" name="staleAccounts" min="0" placeholder="4"></div>
-        <div><label>Domain Admins (count)</label><input type="number" name="priv_da" min="0" placeholder="3"></div>
-        <div><label>Enterprise Admins (count)</label><input type="number" name="priv_ea" min="0" placeholder="1"></div>
-      </div>
-      <h4 style="margin:14px 0 2px">Group Policy</h4>
-      <div class="grid c3">
-        <div><label>Screen lock enforced?</label>{{ yesno('gpo_screen') }}</div>
-        <div><label>Audit policy configured?</label>{{ yesno('gpo_audit') }}</div>
-        <div><label>USB storage blocked?</label>{{ yesno('gpo_usb') }}</div>
-      </div>
-    {% elif prov in ['firewall'] %}
-      <label>Firewall configuration / ruleset <span class="small">(paste the exported text)</span></label>
-      <textarea name="configText" rows="4" placeholder="paste firewall config export"></textarea>
-    {% else %}
-      <label>{{ field_labels.get(idf, idf) }}{% if v and v.connected %} <span class="small">(current: {{ v.id_hint }})</span>{% endif %}</label>
-      <input type="text" name="{{ idf }}" autocomplete="off" placeholder="{{ field_placeholders.get(idf, '') }}">
-      {% for sf in secret_fields %}
-        <label>{{ field_labels.get(sf, sf) }} <span class="small">(encrypted; leave blank to keep existing)</span></label>
-        <input type="password" name="{{ sf }}" autocomplete="off" placeholder="{{ field_placeholders.get(sf, '') }}">
-      {% endfor %}
-      {% for pf in plain %}
-        <label>{{ field_labels.get(pf, pf) }}</label>
-        <input type="text" name="{{ pf }}" placeholder="{{ field_placeholders.get(pf, '') }}" value="{{ (v.region if pf=='region' else v.tenantId) if v else '' }}">
-      {% endfor %}
-    {% endif %}
+    {{ fields(prov, spec, field_labels, field_placeholders, provider_help, v) }}
     <label style="margin-top:12px"><input type="checkbox" name="consent" value="1" style="width:auto"> I authorise read-only posture checks using these credentials.</label>
     <p style="margin-top:12px"><button class="btn green sm" type="submit">{{ 'Update' if v and v.connected else 'Connect &amp; save' }}</button></p>
   </form>
   {% if v and v.connected %}
-  <form method="post" action="/companies/{{ c.id }}/connectors/{{ prov }}/disconnect">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button class="btn red sm" type="submit">Disconnect &amp; delete credentials</button>
-  </form>
+  <div class="rowbtns" style="margin-top:8px">
+    <form method="post" action="/companies/{{ c.id }}/connectors/{{ prov }}/test" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn sm">🔌 Test connection</button>
+    </form>
+    <form method="post" action="/companies/{{ c.id }}/connectors/{{ prov }}/disconnect" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn red sm">Disconnect &amp; delete credentials</button>
+    </form>
+  </div>
   {% endif %}
 </div>
 {% endfor %}

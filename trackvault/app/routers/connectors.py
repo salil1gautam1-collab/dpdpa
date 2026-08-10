@@ -157,22 +157,19 @@ def connectors_page(cid: str, request: Request, db: Session = Depends(get_db)):
                   back=("/companies/" + cid) if p.is_operator else "/workspace")
 
 
-@router.post("/companies/{cid}/connectors/{provider}")
-async def save_connector(cid: str, provider: str, request: Request, db: Session = Depends(get_db)):
-    p, c = _access(request, db, cid)
+def apply_connector_form(db: Session, company, provider: str, form, granted_by: str):
+    """Save one connector's credentials from a submitted form. Shared by the
+    operator page and the public customer setup link. Returns (ok, message)."""
     if provider not in SPECS:
-        raise HTTPException(404, "Unknown provider")
-    form = await request.form()
-    check_csrf(p, form.get("csrf", ""))
+        return False, "Unknown provider."
     id_field, secret_fields, plain_fields, label = SPECS[provider]
     if not form.get("consent"):
-        return redirect(f"/companies/{cid}/connectors", f"Tick the authorisation box to connect {label}.", err=True)
-    conn = db.execute(select(Connector).where(Connector.company_id == cid,
+        return False, f"Tick the authorisation box to connect {label}."
+    conn = db.execute(select(Connector).where(Connector.company_id == company.id,
                                               Connector.provider == provider)).scalar_one_or_none()
     old_secret = decrypt_secret(conn.secret_enc) if conn else {}
     old_public = (conn.public_config or {}) if conn else {}
-    # Collect secret fields (keep existing if blank). AD/GPO is a friendly form,
-    # not a JSON paste — assemble its JSON from the individual fields here.
+    # AD/GPO is a friendly form, not a JSON paste — assemble its JSON here.
     adgpo_json = _adgpo_json(form) if provider == "adgpo" else None
     secret = {}
     for sf in set(secret_fields + ([id_field] if id_field in secret_fields else [])):
@@ -181,7 +178,6 @@ async def save_connector(cid: str, provider: str, request: Request, db: Session 
         else:
             val = (form.get(sf, "") or "").strip()
         secret[sf] = val or old_secret.get(sf, "")
-    # id field may be public (aws/azure) or secret (adgpo/firewall)
     public = dict(old_public)
     if id_field not in secret_fields:
         public[id_field] = (form.get(id_field, "") or "").strip() or old_public.get(id_field, "")
@@ -189,23 +185,79 @@ async def save_connector(cid: str, provider: str, request: Request, db: Session 
         public[pf] = (form.get(pf, "") or "").strip() or old_public.get(pf, "")
     id_present = (public.get(id_field) if id_field not in secret_fields else secret.get(id_field))
     if not id_present:
-        msg = ("Enter at least one value to save AD/GPO." if provider == "adgpo"
-               else f"{FIELD_LABELS.get(id_field, id_field)} is required for {label}.")
-        return redirect(f"/companies/{cid}/connectors", msg, err=True)
-
-    consent = {"granted": True, "grantedBy": (c.contact or p.user.email), "date": date.today().isoformat()}
+        return False, ("Enter at least one value to save AD/GPO." if provider == "adgpo"
+                       else f"{FIELD_LABELS.get(id_field, id_field)} is required for {label}.")
+    consent = {"granted": True, "grantedBy": granted_by, "date": date.today().isoformat()}
     if conn:
         conn.secret_enc = encrypt_secret(secret)
         conn.public_config = public
         conn.consent = consent
     else:
-        conn = Connector(company_id=cid, provider=provider, secret_enc=encrypt_secret(secret),
+        conn = Connector(company_id=company.id, provider=provider, secret_enc=encrypt_secret(secret),
                          public_config=public, consent=consent)
         db.add(conn)
     db.commit()
-    record(db, action="connector.save", actor=p.user, target_type="company", target_id=cid,
-           ip=getattr(request.state, "client_ip", ""), provider=provider)
-    return redirect(f"/companies/{cid}/connectors", f"{label} connected (credentials encrypted).")
+    return True, f"{label} connected (credentials encrypted)."
+
+
+@router.post("/companies/{cid}/connectors/{provider}")
+async def save_connector(cid: str, provider: str, request: Request, db: Session = Depends(get_db)):
+    p, c = _access(request, db, cid)
+    if provider not in SPECS:
+        raise HTTPException(404, "Unknown provider")
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    ok, msg = apply_connector_form(db, c, provider, form, granted_by=(c.contact or p.user.email))
+    if ok:
+        record(db, action="connector.save", actor=p.user, target_type="company", target_id=cid,
+               ip=getattr(request.state, "client_ip", ""), provider=provider)
+    return redirect(f"/companies/{cid}/connectors", msg, err=not ok)
+
+
+@router.post("/companies/{cid}/access-request")
+async def send_access_request(cid: str, request: Request, db: Session = Depends(get_db)):
+    p, c = _access(request, db, cid)
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    providers = [k for k in SPECS if form.get("ar_" + k)]
+    to_email = (form.get("to_email", "") or "").strip()
+    if not providers:
+        return redirect(f"/companies/{cid}/connectors", "Pick at least one connector to request.", err=True)
+    if "@" not in to_email:
+        return redirect(f"/companies/{cid}/connectors", "Enter the IT contact's email.", err=True)
+    from ..config import get_settings
+    from ..services.access_request import build_request_workbook, create_request
+    from ..services.notify_service import _send_email
+    from ..services.settings_service import effective_email_config
+    s = get_settings()
+    raw, ar = create_request(db, c, providers, p.user.email)
+    link = s.base_url.rstrip("/") + "/setup/" + raw
+    xlsx = build_request_workbook(s.brand, c.name, providers, link)
+    body = (f"Hello,\n\n{s.brand} needs read-only access to assess {c.name}'s posture. Please open "
+            f"this private link and follow the attached instructions:\n\n{link}\n\nEverything is "
+            f"read-only and revocable, and values are entered on the secure page — never by email.\n")
+    status, actual = _send_email(
+        to_email, f"{s.brand} — read-only access setup for {c.name}", body,
+        attachments=[(f"Access-Request-{c.slug}.xlsx", xlsx, "application",
+                      "vnd.openxmlformats-officedocument.spreadsheetml.sheet")],
+        cfg=effective_email_config(db))
+    record(db, action="access_request.send", actor=p.user, target_type="company", target_id=cid,
+           ip=getattr(request.state, "client_ip", ""), to=to_email, providers=providers, status=status)
+    where = f" (redirected to {actual} — test mode)" if actual and actual != to_email else ""
+    return redirect(f"/companies/{cid}/connectors",
+                    f"Access request emailed to {to_email}{where}. Copy-able link: {link}")
+
+
+@router.post("/companies/{cid}/connectors/{provider}/test")
+async def test_connector(cid: str, provider: str, request: Request, db: Session = Depends(get_db)):
+    p, c = _access(request, db, cid)
+    form = await request.form()
+    check_csrf(p, form.get("csrf", ""))
+    from ..services.access_request import test_connection
+    ok, msg = test_connection(db, c, provider)
+    record(db, action="connector.test", actor=p.user, target_type="company", target_id=cid,
+           ip=getattr(request.state, "client_ip", ""), provider=provider, ok=ok)
+    return redirect(f"/companies/{cid}/connectors", msg, err=not ok)
 
 
 @router.post("/companies/{cid}/connectors/{provider}/disconnect")

@@ -47,8 +47,13 @@ def _send_email(to: str, subject: str, body: str, attachment: tuple | None = Non
         msg["To"] = actual
         msg["Subject"] = subject
         msg.set_content(body)
-        for fname, data, subtype in ([attachment] if attachment else []) + (attachments or []):
-            msg.add_attachment(data, maintype="text", subtype=subtype, filename=fname)
+        for att in ([attachment] if attachment else []) + (attachments or []):
+            if len(att) == 4:               # (filename, bytes, maintype, subtype)
+                fname, data, maintype, subtype = att
+            else:                            # (filename, bytes, subtype) — text/*
+                fname, data, subtype = att
+                maintype = "text"
+            msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
         with smtplib.SMTP(cfg["host"], int(cfg["port"]), timeout=30) as srv:
             srv.starttls(context=ssl.create_default_context())
             if cfg.get("user"):
