@@ -62,14 +62,29 @@ PROVIDER_HELP = {
     "intune": ("The <b>same</b> Entra ID app registration as Azure can be used — it just also needs the "
                "Microsoft Graph application permission <b>DeviceManagementManagedDevices.Read.All</b> "
                "with admin consent. Paste the three values below. (Not your Microsoft sign-in.)"),
-    "gcp": ("A short-lived <b>read-only</b> OAuth access token for the project — e.g. run "
+    "gcp": ("A <b>read-only</b> OAuth access token for the project — run "
             "<code>gcloud auth print-access-token</code> as an account with <b>Viewer</b> / "
-            "<b>Security Reviewer</b>. Paste the Project ID and the token."),
-    "adgpo": ("<b>No credentials.</b> Run your read-only AD/GPO collector and paste its JSON output "
-              "here — nothing connects to your directory."),
+            "<b>Security Reviewer</b>, and paste it with the Project ID. Note: this token is valid "
+            "for <b>about 1 hour</b>, so generate it right before running the assessment. "
+            "(Durable service-account-key support is on the roadmap.)"),
+    "adgpo": ("<b>No credentials — nothing connects to your directory.</b> Your domain admin runs "
+              "read-only AD/GPO queries and pastes the result here in the shape below (every key is "
+              "optional — anything omitted simply shows as ‘to confirm’). A ready-made collector "
+              "script is on the roadmap; today an admin can produce this JSON directly."),
     "firewall": ("<b>No credentials.</b> Export your firewall’s configuration/ruleset and paste the "
-                 "text here."),
+                 "text. It’s a <b>heuristic</b> read of common formats (Cisco IOS/ASA, iptables, "
+                 "pfSense, Fortinet) — it flags permissive ‘any’ rules, exposed management ports, and "
+                 "missing logging. Findings are advisory; confirm against the live ruleset."),
 }
+
+# Shown on the AD/GPO connector so an admin knows exactly what JSON to produce.
+ADGPO_EXAMPLE = """{
+  "passwordPolicy": {"minLength": 12, "complexity": true, "lockoutThreshold": 5, "maxPasswordAgeDays": 90},
+  "totalUsers": 250,
+  "privilegedGroups": {"Domain Admins": 3, "Enterprise Admins": 1},
+  "staleAccounts": 4,
+  "gpo": {"screenLockConfigured": true, "auditPolicyConfigured": true, "usbStorageBlocked": false}
+}"""
 
 
 def _access(request: Request, db: Session, cid: str) -> tuple:
@@ -100,7 +115,7 @@ def connectors_page(cid: str, request: Request, db: Session = Depends(get_db)):
                       "tenantId": (conn.public_config or {}).get("tenantId", "")}
     return render(request, "connectors.html", c=c, specs=SPECS, view=view,
                   field_labels=FIELD_LABELS, field_placeholders=FIELD_PLACEHOLDERS,
-                  provider_help=PROVIDER_HELP,
+                  provider_help=PROVIDER_HELP, adgpo_example=ADGPO_EXAMPLE,
                   back=("/companies/" + cid) if p.is_operator else "/workspace")
 
 
