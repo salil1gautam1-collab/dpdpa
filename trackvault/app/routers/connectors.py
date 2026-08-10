@@ -67,24 +67,62 @@ PROVIDER_HELP = {
             "<b>Security Reviewer</b>, and paste it with the Project ID. Note: this token is valid "
             "for <b>about 1 hour</b>, so generate it right before running the assessment. "
             "(Durable service-account-key support is on the roadmap.)"),
-    "adgpo": ("<b>No credentials — nothing connects to your directory.</b> Your domain admin runs "
-              "read-only AD/GPO queries and pastes the result here in the shape below (every key is "
-              "optional — anything omitted simply shows as ‘to confirm’). A ready-made collector "
-              "script is on the roadmap; today an admin can produce this JSON directly."),
+    "adgpo": ("<b>No credentials — nothing connects to your directory.</b> Your domain admin reads "
+              "these values from Active Directory / Group Policy and fills in whatever they can "
+              "confirm. Leave anything unknown blank — it simply shows as ‘to confirm’."),
     "firewall": ("<b>No credentials.</b> Export your firewall’s configuration/ruleset and paste the "
                  "text. It’s a <b>heuristic</b> read of common formats (Cisco IOS/ASA, iptables, "
                  "pfSense, Fortinet) — it flags permissive ‘any’ rules, exposed management ports, and "
                  "missing logging. Findings are advisory; confirm against the live ruleset."),
 }
 
-# Shown on the AD/GPO connector so an admin knows exactly what JSON to produce.
-ADGPO_EXAMPLE = """{
-  "passwordPolicy": {"minLength": 12, "complexity": true, "lockoutThreshold": 5, "maxPasswordAgeDays": 90},
-  "totalUsers": 250,
-  "privilegedGroups": {"Domain Admins": 3, "Enterprise Admins": 1},
-  "staleAccounts": 4,
-  "gpo": {"screenLockConfigured": true, "auditPolicyConfigured": true, "usbStorageBlocked": false}
-}"""
+def _adgpo_json(form) -> str:
+    """Assemble the AD/GPO scanner's JSON from the friendly form fields, so admins
+    fill in labeled boxes instead of writing JSON. Blank fields are omitted (the
+    scanner resolves missing keys to TBC). Returns "" if nothing was entered."""
+    import json as _json
+
+    def num(field):
+        v = (form.get(field, "") or "").strip()
+        return int(v) if v.lstrip("-").isdigit() else None
+
+    def tri(field):  # yes / no / (blank = unknown -> omit)
+        v = (form.get(field, "") or "").strip().lower()
+        return True if v == "yes" else (False if v == "no" else None)
+
+    pw = {}
+    if num("pw_minLength") is not None:
+        pw["minLength"] = num("pw_minLength")
+    if tri("pw_complexity") is not None:
+        pw["complexity"] = tri("pw_complexity")
+    if num("pw_lockout") is not None:
+        pw["lockoutThreshold"] = num("pw_lockout")
+    if num("pw_maxAge") is not None:
+        pw["maxPasswordAgeDays"] = num("pw_maxAge")
+    priv = {}
+    if num("priv_da") is not None:
+        priv["Domain Admins"] = num("priv_da")
+    if num("priv_ea") is not None:
+        priv["Enterprise Admins"] = num("priv_ea")
+    gpo = {}
+    for field, key in (("gpo_screen", "screenLockConfigured"),
+                       ("gpo_audit", "auditPolicyConfigured"),
+                       ("gpo_usb", "usbStorageBlocked")):
+        if tri(field) is not None:
+            gpo[key] = tri(field)
+
+    data = {}
+    if pw:
+        data["passwordPolicy"] = pw
+    if num("totalUsers") is not None:
+        data["totalUsers"] = num("totalUsers")
+    if priv:
+        data["privilegedGroups"] = priv
+    if num("staleAccounts") is not None:
+        data["staleAccounts"] = num("staleAccounts")
+    if gpo:
+        data["gpo"] = gpo
+    return _json.dumps(data) if data else ""
 
 
 def _access(request: Request, db: Session, cid: str) -> tuple:
@@ -115,7 +153,7 @@ def connectors_page(cid: str, request: Request, db: Session = Depends(get_db)):
                       "tenantId": (conn.public_config or {}).get("tenantId", "")}
     return render(request, "connectors.html", c=c, specs=SPECS, view=view,
                   field_labels=FIELD_LABELS, field_placeholders=FIELD_PLACEHOLDERS,
-                  provider_help=PROVIDER_HELP, adgpo_example=ADGPO_EXAMPLE,
+                  provider_help=PROVIDER_HELP,
                   back=("/companies/" + cid) if p.is_operator else "/workspace")
 
 
@@ -133,10 +171,15 @@ async def save_connector(cid: str, provider: str, request: Request, db: Session 
                                               Connector.provider == provider)).scalar_one_or_none()
     old_secret = decrypt_secret(conn.secret_enc) if conn else {}
     old_public = (conn.public_config or {}) if conn else {}
-    # Collect secret fields (keep existing if blank)
+    # Collect secret fields (keep existing if blank). AD/GPO is a friendly form,
+    # not a JSON paste — assemble its JSON from the individual fields here.
+    adgpo_json = _adgpo_json(form) if provider == "adgpo" else None
     secret = {}
     for sf in set(secret_fields + ([id_field] if id_field in secret_fields else [])):
-        val = (form.get(sf, "") or "").strip()
+        if provider == "adgpo" and sf == "collectorJson":
+            val = adgpo_json or ""
+        else:
+            val = (form.get(sf, "") or "").strip()
         secret[sf] = val or old_secret.get(sf, "")
     # id field may be public (aws/azure) or secret (adgpo/firewall)
     public = dict(old_public)
@@ -146,7 +189,9 @@ async def save_connector(cid: str, provider: str, request: Request, db: Session 
         public[pf] = (form.get(pf, "") or "").strip() or old_public.get(pf, "")
     id_present = (public.get(id_field) if id_field not in secret_fields else secret.get(id_field))
     if not id_present:
-        return redirect(f"/companies/{cid}/connectors", f"{id_field} is required for {label}.", err=True)
+        msg = ("Enter at least one value to save AD/GPO." if provider == "adgpo"
+               else f"{FIELD_LABELS.get(id_field, id_field)} is required for {label}.")
+        return redirect(f"/companies/{cid}/connectors", msg, err=True)
 
     consent = {"granted": True, "grantedBy": (c.contact or p.user.email), "date": date.today().isoformat()}
     if conn:
